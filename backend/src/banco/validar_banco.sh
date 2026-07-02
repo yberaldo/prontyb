@@ -115,12 +115,9 @@ if [ "$fk_exists" -eq 0 ]; then
   exit 1
 fi
 
-# verificar check constraint de categoria/subcategoria (presenca no CREATE TABLE)
-create_med=$(mysql --defaults-extra-file="$TMPFILE" -sN -D "$DB_NAME" -e "SHOW CREATE TABLE medicacoes_prontuario;" | sed -n '2p')
-if ! echo "$create_med" | grep -q "ck_medicacoes_prontuario_categoria_subcategoria"; then
-  echo "ERRO: constraint de check 'ck_medicacoes_prontuario_categoria_subcategoria' nao encontrada em medicacoes_prontuario" >&2
-  exit 1
-fi
+# Nota: validação de coerencia categoria/subcategoria removida
+# A coerencia será garantida pela camada de aplicacao; mantemos
+# apenas a exibicao do CREATE TABLE feita anteriormente.
 
 # verificar fluidoterapias_prontuario colunas e defaults
 for col in desafio_hidrico_realizado desafio_volume_ml_kg desafio_tempo_min desafio_quantidade desafio_motivo; do

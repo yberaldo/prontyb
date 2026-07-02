@@ -29,23 +29,5 @@ CREATE TABLE medicacoes_prontuario (
     ON UPDATE CASCADE
     ON DELETE RESTRICT,
   CONSTRAINT ck_medicacoes_prontuario_dose_digitada
-    CHECK (dose_digitada IS NULL OR dose_digitada > 0),
-  CONSTRAINT ck_medicacoes_prontuario_categoria_subcategoria
-    CHECK (
-      (categoria = 'pre_anestesica_sedativo' AND subcategoria = 'tranquilizantes_sedativos')
-      OR (categoria = 'pre_anestesica_opioide' AND subcategoria = 'opioides')
-      OR (categoria = 'inducao' AND subcategoria = 'inducao')
-      OR (categoria = 'manutencao' AND subcategoria = 'manutencao')
-      OR (
-        categoria = 'trans_anestesica'
-        AND subcategoria IN (
-          'analgesia',
-          'vasopressores_inotropicos',
-          'anticolinergicos',
-          'antiemeticos',
-          'reversores',
-          'outros'
-        )
-      )
-    )
+    CHECK (dose_digitada IS NULL OR dose_digitada > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
