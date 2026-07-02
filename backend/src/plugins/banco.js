@@ -1,10 +1,12 @@
 'use strict'
 
 // Plugin que cria e registra um pool mysql2/promise em fastify.mysql
+// Envolvido com fastify-plugin para garantir visibilidade correta
+const fastifyPlugin = require('fastify-plugin');
 const mysql = require('mysql2/promise');
 const env = require('../configuracoes/ambiente');
 
-module.exports = async function (fastify, opts) {
+async function plugin(fastify, opts) {
   const pool = mysql.createPool({
     host: env.DB_HOST,
     port: env.DB_PORT,
@@ -25,7 +27,10 @@ module.exports = async function (fastify, opts) {
       await pool.end();
       fastify.log.info('Pool MySQL fechado');
     } catch (err) {
-      fastify.log.error('Erro fechando pool MySQL', err);
+      // nao expor detalhes sensiveis nos logs
+      fastify.log.error({ erro: err && err.message ? err.message : String(err), code: err && err.code ? err.code : null }, 'Erro fechando pool MySQL');
     }
   });
-};
+}
+
+module.exports = fastifyPlugin(plugin);
