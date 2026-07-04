@@ -20,8 +20,9 @@ module.exports = {
         if (busca === '') busca = null; // busca vazia ignorada
       }
 
-      const ativoParam = parseBooleanParam(request.query.ativo);
-      if (request.query.hasOwnProperty('ativo') && ativoParam === null) {
+      const ativoParam = parseBooleanParam(request.query && request.query.ativo);
+      const hasAtivo = request.query && Object.prototype.hasOwnProperty.call(request.query, 'ativo');
+      if (hasAtivo && ativoParam === null) {
         return reply.code(400).send({ ok: false, mensagem: 'ativo invalido' });
       }
 
