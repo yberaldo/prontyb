@@ -9,5 +9,7 @@ module.exports = function (fastify, opts, done) {
 
   fastify.get('/prontuarios_anestesicos/:prontuario_id/monitorizacoes/:monitorizacao_extraida_id/linhas', controlador.listarLinhas);
 
+  fastify.post('/prontuarios_anestesicos/:prontuario_id/monitorizacoes/:monitorizacao_extraida_id/processamento-manual', controlador.processarManual);
+
   done();
 };

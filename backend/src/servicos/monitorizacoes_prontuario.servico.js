@@ -4,6 +4,8 @@ const repositorio = require('../repositorios/monitorizacoes_prontuario.repositor
 const prontuariosRepo = require('../repositorios/prontuarios_anestesicos.repositorio');
 
 const STATUS_PERMITIDOS = ['pendente', 'extraido', 'revisado', 'erro'];
+const TIPO_ANEXO_MONITORIZACAO = 'pdf_monitorizacao';
+const LIMITE_LINHAS_PROCESSAMENTO_MANUAL = 2000;
 
 function criarErro(mensagem, code) {
   const err = new Error(mensagem);
@@ -25,6 +27,108 @@ function validarStatus(status) {
   if (status === null || typeof status === 'undefined' || status === '') return null;
   if (!STATUS_PERMITIDOS.includes(status)) throw criarErro('status invalido', 'BAD_REQUEST');
   return status;
+}
+
+function validarObjetoJsonOuArrayOuNull(valor, campo) {
+  if (valor === null || Array.isArray(valor)) return valor;
+  if (typeof valor === 'object' && typeof valor !== 'undefined') return valor;
+  throw criarErro(`${campo} deve ser objeto, array ou null`, 'BAD_REQUEST');
+}
+
+function validarObjetoJsonOuArray(valor, campo) {
+  if (Array.isArray(valor)) return valor;
+  if (valor !== null && typeof valor === 'object' && typeof valor !== 'undefined') return valor;
+  throw criarErro(`${campo} deve ser objeto ou array`, 'BAD_REQUEST');
+}
+
+function normalizarHorario(valor, indice) {
+  if (valor === null || typeof valor === 'undefined') return null;
+  if (typeof valor !== 'string') throw criarErro(`linhas[${indice}].horario invalido`, 'BAD_REQUEST');
+
+  const match = /^([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?$/.exec(valor);
+  if (!match) throw criarErro(`linhas[${indice}].horario invalido`, 'BAD_REQUEST');
+
+  const hora = Number(match[1]);
+  const minuto = Number(match[2]);
+  const segundo = typeof match[3] === 'undefined' ? 0 : Number(match[3]);
+
+  if (hora > 23 || minuto > 59 || segundo > 59) {
+    throw criarErro(`linhas[${indice}].horario invalido`, 'BAD_REQUEST');
+  }
+
+  return `${match[1]}:${match[2]}:${String(segundo).padStart(2, '0')}`;
+}
+
+function validarBodyProcessamentoManual(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw criarErro('body invalido', 'BAD_REQUEST');
+  }
+
+  const permitidos = ['colunas_json', 'dados_json', 'linhas'];
+  for (const campo of Object.keys(body)) {
+    if (!permitidos.includes(campo)) throw criarErro(`campo desconhecido no body: ${campo}`, 'BAD_REQUEST');
+  }
+
+  for (const campo of permitidos) {
+    if (!Object.prototype.hasOwnProperty.call(body, campo)) {
+      throw criarErro(`campo obrigatorio ausente: ${campo}`, 'BAD_REQUEST');
+    }
+  }
+
+  if (!Array.isArray(body.colunas_json)) {
+    throw criarErro('colunas_json deve ser array', 'BAD_REQUEST');
+  }
+
+  const dados_json = validarObjetoJsonOuArrayOuNull(body.dados_json, 'dados_json');
+
+  if (!Array.isArray(body.linhas)) {
+    throw criarErro('linhas deve ser array', 'BAD_REQUEST');
+  }
+  if (body.linhas.length === 0) {
+    throw criarErro('linhas deve ter ao menos 1 item', 'BAD_REQUEST');
+  }
+  if (body.linhas.length > LIMITE_LINHAS_PROCESSAMENTO_MANUAL) {
+    throw criarErro(`linhas excede limite de ${LIMITE_LINHAS_PROCESSAMENTO_MANUAL} itens`, 'BAD_REQUEST');
+  }
+
+  const ordens = new Set();
+  const linhas = body.linhas.map((linha, indice) => {
+    if (!linha || typeof linha !== 'object' || Array.isArray(linha)) {
+      throw criarErro(`linhas[${indice}] invalida`, 'BAD_REQUEST');
+    }
+
+    const permitidosLinha = ['ordem', 'horario', 'dados_json'];
+    for (const campo of Object.keys(linha)) {
+      if (!permitidosLinha.includes(campo)) throw criarErro(`campo desconhecido em linhas[${indice}]: ${campo}`, 'BAD_REQUEST');
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(linha, 'ordem')) {
+      throw criarErro(`linhas[${indice}].ordem obrigatoria`, 'BAD_REQUEST');
+    }
+    if (!Number.isSafeInteger(linha.ordem) || linha.ordem < 0) {
+      throw criarErro(`linhas[${indice}].ordem invalida`, 'BAD_REQUEST');
+    }
+    if (ordens.has(linha.ordem)) {
+      throw criarErro(`ordem duplicada: ${linha.ordem}`, 'BAD_REQUEST');
+    }
+    ordens.add(linha.ordem);
+
+    if (!Object.prototype.hasOwnProperty.call(linha, 'dados_json')) {
+      throw criarErro(`linhas[${indice}].dados_json obrigatorio`, 'BAD_REQUEST');
+    }
+
+    return {
+      ordem: linha.ordem,
+      horario: normalizarHorario(linha.horario, indice),
+      dados_json: validarObjetoJsonOuArray(linha.dados_json, `linhas[${indice}].dados_json`)
+    };
+  });
+
+  return {
+    colunas_json: body.colunas_json,
+    dados_json,
+    linhas
+  };
 }
 
 module.exports = {
@@ -93,5 +197,31 @@ module.exports = {
 
     const rows = await repositorio.listarLinhasPorMonitorizacaoId(fastify, prontuario_id, monitorizacao_extraida_id);
     return rows.map(r => module.exports._serializeLinha(r));
+  },
+
+  async processarManual(fastify, prontuario_id, monitorizacao_extraida_id, body = {}) {
+    const dados = validarBodyProcessamentoManual(body);
+
+    const prontuario = await prontuariosRepo.buscarPorId(fastify, prontuario_id);
+    if (!prontuario) throw criarErro('prontuario nao encontrado', 'NOT_FOUND');
+
+    const monitorizacao = await repositorio.buscarPorId(fastify, monitorizacao_extraida_id, prontuario_id);
+    if (!monitorizacao) throw criarErro('monitorizacao nao encontrada', 'NOT_FOUND');
+
+    if (monitorizacao.anexo_tipo_anexo !== TIPO_ANEXO_MONITORIZACAO) {
+      throw criarErro('anexo da monitorizacao deve ser pdf_monitorizacao', 'BAD_REQUEST');
+    }
+
+    if (monitorizacao.status !== 'pendente') {
+      throw criarErro('monitorizacao nao esta pendente', 'CONFLICT');
+    }
+
+    return repositorio.processarManualEstruturado(fastify, {
+      prontuario_id,
+      monitorizacao_extraida_id,
+      colunas_json: dados.colunas_json,
+      dados_json: dados.dados_json,
+      linhas: dados.linhas
+    });
   }
 };

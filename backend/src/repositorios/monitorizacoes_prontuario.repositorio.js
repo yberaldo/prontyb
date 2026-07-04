@@ -66,5 +66,99 @@ module.exports = {
     `;
     const [rows] = await fastify.mysql.query(sql, [prontuario_id, monitorizacao_extraida_id]);
     return rows;
+  },
+
+  async processarManualEstruturado(fastify, { prontuario_id, monitorizacao_extraida_id, colunas_json, dados_json, linhas }) {
+    const conn = await fastify.mysql.getConnection();
+
+    try {
+      await conn.beginTransaction();
+
+      const sqlBusca = `
+        SELECT
+          m.id, m.prontuario_id, m.anexo_id, m.status,
+          a.tipo_anexo AS anexo_tipo_anexo
+        FROM monitorizacoes_extraidas m
+        INNER JOIN anexos_prontuario a ON a.id = m.anexo_id AND a.prontuario_id = m.prontuario_id
+        WHERE m.id = ? AND m.prontuario_id = ?
+        LIMIT 1
+        FOR UPDATE
+      `;
+      const [rows] = await conn.query(sqlBusca, [monitorizacao_extraida_id, prontuario_id]);
+      const monitorizacao = rows && rows.length ? rows[0] : null;
+
+      if (!monitorizacao) {
+        const err = new Error('monitorizacao nao encontrada');
+        err.code = 'NOT_FOUND';
+        throw err;
+      }
+
+      if (monitorizacao.anexo_tipo_anexo !== 'pdf_monitorizacao') {
+        const err = new Error('anexo da monitorizacao deve ser pdf_monitorizacao');
+        err.code = 'BAD_REQUEST';
+        throw err;
+      }
+
+      if (monitorizacao.status !== 'pendente') {
+        const err = new Error('monitorizacao nao esta pendente');
+        err.code = 'CONFLICT';
+        throw err;
+      }
+
+      await conn.execute(
+        'DELETE FROM monitorizacao_linhas WHERE prontuario_id = ? AND monitorizacao_extraida_id = ?',
+        [prontuario_id, monitorizacao_extraida_id]
+      );
+
+      for (const linha of linhas) {
+        await conn.execute(
+          `
+            INSERT INTO monitorizacao_linhas
+              (prontuario_id, monitorizacao_extraida_id, horario, dados_json, ordem)
+            VALUES (?, ?, ?, ?, ?)
+          `,
+          [
+            prontuario_id,
+            monitorizacao_extraida_id,
+            linha.horario,
+            JSON.stringify(linha.dados_json),
+            linha.ordem
+          ]
+        );
+      }
+
+      const [result] = await conn.execute(
+        `
+          UPDATE monitorizacoes_extraidas
+          SET colunas_json = ?, dados_json = ?, status = 'extraido'
+          WHERE id = ? AND prontuario_id = ? AND status = 'pendente'
+        `,
+        [
+          JSON.stringify(colunas_json),
+          dados_json === null ? null : JSON.stringify(dados_json),
+          monitorizacao_extraida_id,
+          prontuario_id
+        ]
+      );
+
+      if (!result || result.affectedRows !== 1) {
+        const err = new Error('monitorizacao nao esta pendente');
+        err.code = 'CONFLICT';
+        throw err;
+      }
+
+      await conn.commit();
+      return {
+        id: monitorizacao_extraida_id,
+        prontuario_id,
+        status: 'extraido',
+        linhas_inseridas: linhas.length
+      };
+    } catch (err) {
+      try { await conn.rollback(); } catch (_) {}
+      throw err;
+    } finally {
+      conn.release();
+    }
   }
 };
