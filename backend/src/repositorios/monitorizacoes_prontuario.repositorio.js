@@ -1,7 +1,16 @@
 'use strict'
 
-// Repositorio somente leitura para monitorizacoes extraidas do prontuario
+// Repositorio para monitorizacoes extraidas do prontuario
 module.exports = {
+  async criarPendentePorAnexo(fastify, { prontuario_id, anexo_id }) {
+    const sql = `
+      INSERT INTO monitorizacoes_extraidas (prontuario_id, anexo_id, dados_json, colunas_json, status)
+      VALUES (?, ?, NULL, NULL, 'pendente')
+    `;
+    const [result] = await fastify.mysql.execute(sql, [prontuario_id, anexo_id]);
+    return result.insertId;
+  },
+
   async listarPorProntuarioId(fastify, prontuario_id, { status = null } = {}) {
     const params = [prontuario_id];
     let whereStatus = '';

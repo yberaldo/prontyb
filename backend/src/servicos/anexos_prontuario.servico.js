@@ -3,6 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const repositorio = require('../repositorios/anexos_prontuario.repositorio');
+const monitorizacoesRepo = require('../repositorios/monitorizacoes_prontuario.repositorio');
 const prontuariosRepo = require('../repositorios/prontuarios_anestesicos.repositorio');
 const {
   LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES,
@@ -15,6 +16,7 @@ const {
 
 const DIRETORIO_BACKEND = path.resolve(__dirname, '..', '..');
 const DIRETORIO_UPLOADS_PRONTUARIOS = path.resolve(DIRETORIO_BACKEND, 'uploads', 'prontuarios');
+const TIPO_ANEXO_MONITORIZACAO = 'pdf_monitorizacao';
 
 function isPositiveInt(v) {
   return Number.isInteger(v) && v > 0;
@@ -93,6 +95,20 @@ function validarArquivoUpload(arquivo) {
   if (arquivo.buffer.length === 0) throw erroValidacao('arquivo vazio');
   if (arquivo.buffer.length > LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES) throw erroValidacao('arquivo excede limite de 20 MB');
   if (!Object.prototype.hasOwnProperty.call(MIME_EXTENSOES_PERMITIDAS, arquivo.mime_type)) throw erroValidacao('mime_type invalido');
+}
+
+async function criarMonitorizacaoPendenteSeNecessario(fastify, anexo) {
+  if (!anexo || anexo.tipo_anexo !== TIPO_ANEXO_MONITORIZACAO) return null;
+
+  try {
+    return await monitorizacoesRepo.criarPendentePorAnexo(fastify, {
+      prontuario_id: anexo.prontuario_id,
+      anexo_id: anexo.id
+    });
+  } catch (err) {
+    if (err && err.code === 'ER_DUP_ENTRY') throw erroValidacao('monitorizacao ja existe para anexo');
+    throw err;
+  }
 }
 
 module.exports = {
@@ -177,11 +193,20 @@ module.exports = {
       tamanho_bytes: t
     };
 
+    let insertId = null;
+
     try {
-      const insertId = await repositorio.criar(fastify, toInsert);
+      insertId = await repositorio.criar(fastify, toInsert);
       const row = await repositorio.buscarPorId(fastify, insertId);
+      if (!row) throw new Error('anexo inserido nao encontrado');
+
+      await criarMonitorizacaoPendenteSeNecessario(fastify, row);
       return module.exports._serialize(row);
     } catch (err) {
+      if (insertId !== null) {
+        try { await repositorio.remover(fastify, insertId); } catch (_) {}
+      }
+
       // checar duplicidade de caminho (uk_anexos_prontuario_caminho_arquivo)
       if (err && err.code && err.code === 'ER_DUP_ENTRY') {
         const e = new Error('caminho_arquivo ja existe'); e.code = 'BAD_REQUEST'; throw e;
@@ -232,6 +257,7 @@ module.exports = {
       const row = await repositorio.buscarPorId(fastify, insertId);
       if (!row) throw new Error('anexo inserido nao encontrado');
 
+      await criarMonitorizacaoPendenteSeNecessario(fastify, row);
       return module.exports._serialize(row);
     } catch (err) {
       if (insertId !== null) {
