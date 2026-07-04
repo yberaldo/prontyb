@@ -16,6 +16,7 @@ module.exports = {
       return reply.send({ ok: true, dados });
     } catch (err) {
       request.log.error({ erro: err && err.message ? err.message : String(err) }, 'Erro listando medicacoes');
+      if (err && err.code === 'NOT_FOUND') return reply.code(404).send({ ok: false, mensagem: err.message });
       return reply.code(500).send({ ok: false, mensagem: 'erro interno' });
     }
   },

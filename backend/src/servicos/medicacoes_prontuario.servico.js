@@ -43,6 +43,10 @@ module.exports = {
   },
 
   async listarPorProntuarioId(fastify, prontuario_id) {
+    // validar existencia do prontuario antes de listar
+    const prontuario = await prontuariosRepo.buscarPorId(fastify, prontuario_id);
+    if (!prontuario) { const err = new Error('prontuario nao encontrado'); err.code = 'NOT_FOUND'; throw err; }
+
     const rows = await repositorio.listarPorProntuarioId(fastify, prontuario_id);
     return rows.map(r => module.exports._serialize(r));
   },
