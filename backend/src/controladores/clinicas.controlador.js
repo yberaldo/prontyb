@@ -11,6 +11,14 @@ function parseBooleanParam(valor) {
   return null;
 }
 
+function isPositiveIntValue(v) {
+  if (typeof v !== 'string' && typeof v !== 'number') return false;
+  const s = String(v);
+  if (!/^[1-9][0-9]*$/.test(s)) return false;
+  const n = Number(s);
+  return Number.isSafeInteger(n) && n > 0;
+}
+
 module.exports = {
   async listar(request, reply) {
     try {
@@ -27,9 +35,9 @@ module.exports = {
 
   async buscarPorId(request, reply) {
     try {
-      const id = parseInt(request.params.id, 10);
-      if (isNaN(id)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
-      const registro = await servico.obterPorId(request.server, id);
+      const idParam = request.params.id;
+      if (!isPositiveIntValue(idParam)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
+      const registro = await servico.obterPorId(request.server, Number(idParam));
       if (!registro) return reply.code(404).send({ ok: false, mensagem: 'clinica nao encontrada' });
       return reply.send({ ok: true, dados: registro });
     } catch (err) {
@@ -68,8 +76,9 @@ module.exports = {
 
   async atualizar(request, reply) {
     try {
-      const id = parseInt(request.params.id, 10);
-      if (isNaN(id)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
+      const idParam = request.params.id;
+      if (!isPositiveIntValue(idParam)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
+      const id = Number(idParam);
 
       const body = request.body || {};
       const dados = {};
@@ -105,9 +114,9 @@ module.exports = {
 
   async ativar(request, reply) {
     try {
-      const id = parseInt(request.params.id, 10);
-      if (isNaN(id)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
-      const atualizado = await servico.ativar(request.server, id);
+      const idParam = request.params.id;
+      if (!isPositiveIntValue(idParam)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
+      const atualizado = await servico.ativar(request.server, Number(idParam));
       if (!atualizado) return reply.code(404).send({ ok: false, mensagem: 'clinica nao encontrada' });
       return reply.send({ ok: true, dados: atualizado });
     } catch (err) {
@@ -118,9 +127,9 @@ module.exports = {
 
   async desativar(request, reply) {
     try {
-      const id = parseInt(request.params.id, 10);
-      if (isNaN(id)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
-      const atualizado = await servico.desativar(request.server, id);
+      const idParam = request.params.id;
+      if (!isPositiveIntValue(idParam)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
+      const atualizado = await servico.desativar(request.server, Number(idParam));
       if (!atualizado) return reply.code(404).send({ ok: false, mensagem: 'clinica nao encontrada' });
       return reply.send({ ok: true, dados: atualizado });
     } catch (err) {
