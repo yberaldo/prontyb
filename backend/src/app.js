@@ -29,6 +29,7 @@ function criarApp() {
     limits: {
       fileSize: LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES
     },
+    preservePath: true,
     throwFileSizeLimit: true
   });
 
