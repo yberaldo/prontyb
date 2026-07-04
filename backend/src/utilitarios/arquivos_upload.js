@@ -23,6 +23,22 @@ function obterNomeBase(nomeOriginal) {
   return partes[partes.length - 1] || 'arquivo';
 }
 
+function validarNomeOriginalArquivo(nomeOriginal) {
+  if (!nomeOriginalInformado(nomeOriginal)) return;
+
+  const nome = nomeOriginal.trim();
+  if (
+    nome.includes('../') ||
+    nome.includes('..\\') ||
+    nome.includes('/') ||
+    nome.includes('\\') ||
+    nome.startsWith('/') ||
+    /^[A-Za-z]:/.test(nome)
+  ) {
+    throw erroValidacao('nome_arquivo invalido');
+  }
+}
+
 function sanitizarNomeArquivo(nomeOriginal) {
   const base = obterNomeBase(nomeOriginal)
     .normalize('NFD')
@@ -68,6 +84,8 @@ function limitarStem(stem, limite) {
 }
 
 function gerarNomeFinal({ prontuarioId, nomeOriginal, mimeType }) {
+  validarNomeOriginalArquivo(nomeOriginal);
+
   const nomeSanitizado = sanitizarNomeArquivo(nomeOriginal);
   const ext = validarMimeExtensao(mimeType, nomeSanitizado, nomeOriginal);
   const stemOriginal = path.basename(nomeSanitizado, ext);
