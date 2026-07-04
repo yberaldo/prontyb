@@ -1,7 +1,20 @@
 'use strict'
 
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const repositorio = require('../repositorios/anexos_prontuario.repositorio');
 const prontuariosRepo = require('../repositorios/prontuarios_anestesicos.repositorio');
+const {
+  LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES,
+  TIPOS_ANEXO_PERMITIDOS,
+  MIME_EXTENSOES_PERMITIDAS,
+  erroValidacao,
+  gerarNomeFinal,
+  estaDentroDiretorio
+} = require('../utilitarios/arquivos_upload');
+
+const DIRETORIO_BACKEND = path.resolve(__dirname, '..', '..');
+const DIRETORIO_UPLOADS_PRONTUARIOS = path.resolve(DIRETORIO_BACKEND, 'uploads', 'prontuarios');
 
 function isPositiveInt(v) {
   return Number.isInteger(v) && v > 0;
@@ -14,6 +27,28 @@ function hasPathTraversal(v) {
   if (v.startsWith('/')) return true;
   if (/^[A-Za-z]:\\/.test(v)) return true;
   return false;
+}
+
+async function removerArquivoSeExistir(caminho) {
+  if (!caminho) return;
+  try {
+    await fs.unlink(caminho);
+  } catch (err) {
+    if (!err || err.code !== 'ENOENT') throw err;
+  }
+}
+
+function validarTipoAnexo(tipo_anexo) {
+  if (!tipo_anexo) throw erroValidacao('tipo_anexo obrigatorio');
+  if (!TIPOS_ANEXO_PERMITIDOS.includes(tipo_anexo)) throw erroValidacao('tipo_anexo invalido');
+}
+
+function validarArquivoUpload(arquivo) {
+  if (!arquivo) throw erroValidacao('arquivo obrigatorio');
+  if (!Buffer.isBuffer(arquivo.buffer)) throw erroValidacao('arquivo invalido');
+  if (arquivo.buffer.length === 0) throw erroValidacao('arquivo vazio');
+  if (arquivo.buffer.length > LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES) throw erroValidacao('arquivo excede limite de 20 MB');
+  if (!Object.prototype.hasOwnProperty.call(MIME_EXTENSOES_PERMITIDAS, arquivo.mime_type)) throw erroValidacao('mime_type invalido');
 }
 
 module.exports = {
@@ -107,6 +142,62 @@ module.exports = {
       if (err && err.code && err.code === 'ER_DUP_ENTRY') {
         const e = new Error('caminho_arquivo ja existe'); e.code = 'BAD_REQUEST'; throw e;
       }
+      throw err;
+    }
+  },
+
+  async criarUpload(fastify, prontuario_id, dados = {}) {
+    const prontuario = await prontuariosRepo.buscarPorId(fastify, prontuario_id);
+    if (!prontuario) { const err = new Error('prontuario nao encontrado'); err.code = 'NOT_FOUND'; throw err; }
+
+    validarTipoAnexo(dados.tipo_anexo);
+    validarArquivoUpload(dados.arquivo);
+
+    const { nomeArquivo, caminhoArquivo } = gerarNomeFinal({
+      prontuarioId: prontuario_id,
+      nomeOriginal: dados.arquivo.nome_original,
+      mimeType: dados.arquivo.mime_type
+    });
+
+    const diretorioProntuario = path.resolve(DIRETORIO_UPLOADS_PRONTUARIOS, String(prontuario_id));
+    const caminhoAbsoluto = path.resolve(diretorioProntuario, nomeArquivo);
+
+    if (!estaDentroDiretorio(DIRETORIO_UPLOADS_PRONTUARIOS, diretorioProntuario) || !estaDentroDiretorio(diretorioProntuario, caminhoAbsoluto)) {
+      throw erroValidacao('caminho_arquivo invalido');
+    }
+
+    let insertId = null;
+    let arquivoCriado = false;
+
+    try {
+      await fs.mkdir(diretorioProntuario, { recursive: true });
+      await fs.writeFile(caminhoAbsoluto, dados.arquivo.buffer, { flag: 'wx' });
+      arquivoCriado = true;
+
+      const stat = await fs.stat(caminhoAbsoluto);
+      const toInsert = {
+        prontuario_id: prontuario_id,
+        tipo_anexo: dados.tipo_anexo,
+        nome_arquivo: nomeArquivo,
+        caminho_arquivo: caminhoArquivo,
+        mime_type: dados.arquivo.mime_type,
+        tamanho_bytes: stat.size
+      };
+
+      insertId = await repositorio.criar(fastify, toInsert);
+      const row = await repositorio.buscarPorId(fastify, insertId);
+      if (!row) throw new Error('anexo inserido nao encontrado');
+
+      return module.exports._serialize(row);
+    } catch (err) {
+      if (insertId !== null) {
+        try { await repositorio.remover(fastify, insertId); } catch (_) {}
+      }
+      if (arquivoCriado) {
+        try { await removerArquivoSeExistir(caminhoAbsoluto); } catch (_) {}
+      }
+      if (err && err.code === 'EEXIST') throw erroValidacao('arquivo ja existe');
+      if (err && err.code === 'ER_DUP_ENTRY') throw erroValidacao('caminho_arquivo ja existe');
       throw err;
     }
   },

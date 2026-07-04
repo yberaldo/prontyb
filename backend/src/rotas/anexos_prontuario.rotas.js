@@ -12,6 +12,9 @@ module.exports = function (fastify, opts, done) {
   // criar metadata
   fastify.post('/prontuarios_anestesicos/:prontuario_id/anexos', controlador.criar);
 
+  // upload real multipart
+  fastify.post('/prontuarios_anestesicos/:prontuario_id/anexos/upload', controlador.upload);
+
   // remover metadata
   fastify.delete('/prontuarios_anestesicos/:prontuario_id/anexos/:anexo_id', controlador.remover);
 

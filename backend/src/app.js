@@ -2,7 +2,9 @@
 
 const Fastify = require('fastify');
 const cors = require('@fastify/cors');
+const multipart = require('@fastify/multipart');
 const pluginBanco = require('./plugins/banco');
+const { LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES } = require('./utilitarios/arquivos_upload');
 const saudeRotas = require('./rotas/saude.rotas');
 const bancoRotas = require('./rotas/banco.rotas');
 const clinicasRotas = require('./rotas/clinicas.rotas');
@@ -21,6 +23,14 @@ function criarApp() {
 
   // CORS: permitir qualquer origin em desenvolvimento; restringir em producao
   app.register(cors, { origin: true });
+
+  // multipart: limite global para uploads de anexos do prontuario
+  app.register(multipart, {
+    limits: {
+      fileSize: LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES
+    },
+    throwFileSizeLimit: true
+  });
 
   // registrar plugin do banco (pool mysql)
   app.register(pluginBanco);
