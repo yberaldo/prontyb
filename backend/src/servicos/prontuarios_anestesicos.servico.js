@@ -7,12 +7,61 @@ function isPositiveInt(v) {
 }
 
 module.exports = {
+  // Serializa um registro bruto vindo do repositório para o contrato de API
+  _serialize(reg) {
+    if (!reg) return null;
+    const item = {
+      id: reg.id,
+      numero_prontuario: reg.numero_prontuario,
+      clinica_id: reg.clinica_id,
+      nome_animal: reg.nome_animal,
+      especie: reg.especie,
+      raca: reg.raca,
+      sexo: reg.sexo,
+      idade: reg.idade,
+      peso: reg.peso,
+      nome_tutor: reg.nome_tutor,
+      nome_procedimento: reg.nome_procedimento,
+      data_procedimento: reg.data_procedimento,
+      cirurgiao_id: reg.cirurgiao_id,
+      anestesista_id: reg.anestesista_id,
+      observacoes_pre_anestesicas: reg.observacoes_pre_anestesicas,
+      criado_em: reg.criado_em,
+      atualizado_em: reg.atualizado_em
+    };
+
+    // clinica: se clinica_id for null -> null, senão objeto com id/nome
+    if (reg.clinica_id === null || typeof reg.clinica_id === 'undefined') {
+      item.clinica = null;
+    } else {
+      item.clinica = { id: reg.clinica_id || null, nome: reg.clinica_nome || null };
+    }
+
+    // anestesista: similar
+    if (reg.anestesista_id === null || typeof reg.anestesista_id === 'undefined') {
+      item.anestesista = null;
+    } else {
+      item.anestesista = { id: reg.anestesista_id || null, nome: reg.anestesista_nome || null, crmv: reg.anestesista_crmv || null, uf: reg.anestesista_uf || null };
+    }
+
+    // cirurgiao
+    if (reg.cirurgiao_id === null || typeof reg.cirurgiao_id === 'undefined') {
+      item.cirurgiao = null;
+    } else {
+      item.cirurgiao = { id: reg.cirurgiao_id || null, nome: reg.cirurgiao_nome || null, crmv: reg.cirurgiao_crmv || null, uf: reg.cirurgiao_uf || null };
+    }
+
+    return item;
+  },
+
   async listar(fastify, filtros) {
-    return repositorio.listar(fastify, filtros);
+    const rows = await repositorio.listar(fastify, filtros);
+    return rows.map(r => module.exports._serialize(r));
   },
 
   async obterPorId(fastify, id) {
-    return repositorio.buscarPorId(fastify, id);
+    const row = await repositorio.buscarPorId(fastify, id);
+    return module.exports._serialize(row);
   },
 
   async criar(fastify, dados) {
@@ -49,7 +98,8 @@ module.exports = {
 
     try {
       const insertId = await repositorio.criar(fastify, dados);
-      return repositorio.buscarPorId(fastify, insertId);
+      const row = await repositorio.buscarPorId(fastify, insertId);
+      return module.exports._serialize(row);
     } catch (err) {
       if (err && err.code === 'ER_DUP_ENTRY') {
         const e = new Error('numero_prontuario_duplicado'); e.code = 'DUPLICATE'; throw e;
@@ -95,6 +145,7 @@ module.exports = {
 
     const affected = await repositorio.atualizar(fastify, id, dados);
     if (affected === 0) return null;
-    return repositorio.buscarPorId(fastify, id);
+    const row = await repositorio.buscarPorId(fastify, id);
+    return module.exports._serialize(row);
   }
 };
