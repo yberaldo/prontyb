@@ -96,5 +96,32 @@ module.exports = {
       request.log.error({ erro: err && err.message ? err.message : String(err) }, 'Erro processando monitorizacao manual');
       return reply.code(500).send({ ok: false, mensagem: 'erro interno' });
     }
+  },
+
+  async revisar(request, reply) {
+    try {
+      const prontuario_id = request.params.prontuario_id;
+      const monitorizacao_extraida_id = request.params.monitorizacao_extraida_id;
+      if (!isPositiveIntValue(prontuario_id)) return reply.code(400).send({ ok: false, mensagem: 'prontuario_id invalido' });
+      if (!isPositiveIntValue(monitorizacao_extraida_id)) return reply.code(400).send({ ok: false, mensagem: 'monitorizacao_extraida_id invalido' });
+
+      const dados = await servico.revisar(
+        request.server,
+        Number(prontuario_id),
+        Number(monitorizacao_extraida_id),
+        request.body
+      );
+
+      return reply.send({
+        ok: true,
+        mensagem: 'monitorizacao revisada',
+        dados
+      });
+    } catch (err) {
+      const resposta = tratarErroConhecido(err, reply);
+      if (resposta) return resposta;
+      request.log.error({ erro: err && err.message ? err.message : String(err) }, 'Erro revisando monitorizacao');
+      return reply.code(500).send({ ok: false, mensagem: 'erro interno' });
+    }
   }
 };

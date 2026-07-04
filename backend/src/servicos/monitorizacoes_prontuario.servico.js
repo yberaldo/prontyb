@@ -131,6 +131,25 @@ function validarBodyProcessamentoManual(body) {
   };
 }
 
+function validarBodyRevisao(body) {
+  if (body === null || typeof body === 'undefined') return;
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    throw criarErro('body invalido', 'BAD_REQUEST');
+  }
+
+  const campos = Object.keys(body);
+  if (campos.length > 0) {
+    throw criarErro(`campo desconhecido no body: ${campos[0]}`, 'BAD_REQUEST');
+  }
+}
+
+function erroStatusNaoRevisavel(status) {
+  if (status === 'pendente') return criarErro('monitorizacao ainda nao foi extraida', 'CONFLICT');
+  if (status === 'revisado') return criarErro('monitorizacao ja revisada', 'CONFLICT');
+  if (status === 'erro') return criarErro('monitorizacao com erro nao pode ser revisada', 'CONFLICT');
+  return criarErro('monitorizacao nao pode ser revisada', 'CONFLICT');
+}
+
 module.exports = {
   STATUS_PERMITIDOS,
 
@@ -223,5 +242,32 @@ module.exports = {
       dados_json: dados.dados_json,
       linhas: dados.linhas
     });
+  },
+
+  async revisar(fastify, prontuario_id, monitorizacao_extraida_id, body = null) {
+    validarBodyRevisao(body);
+
+    const prontuario = await prontuariosRepo.buscarPorId(fastify, prontuario_id);
+    if (!prontuario) throw criarErro('prontuario nao encontrado', 'NOT_FOUND');
+
+    const monitorizacao = await repositorio.buscarPorId(fastify, monitorizacao_extraida_id, prontuario_id);
+    if (!monitorizacao) throw criarErro('monitorizacao nao encontrada', 'NOT_FOUND');
+
+    if (monitorizacao.status !== 'extraido') {
+      throw erroStatusNaoRevisavel(monitorizacao.status);
+    }
+
+    const affected = await repositorio.marcarRevisada(fastify, prontuario_id, monitorizacao_extraida_id);
+    if (affected !== 1) {
+      const atual = await repositorio.buscarPorId(fastify, monitorizacao_extraida_id, prontuario_id);
+      if (!atual) throw criarErro('monitorizacao nao encontrada', 'NOT_FOUND');
+      throw erroStatusNaoRevisavel(atual.status);
+    }
+
+    return {
+      id: monitorizacao_extraida_id,
+      prontuario_id,
+      status: 'revisado'
+    };
   }
 };

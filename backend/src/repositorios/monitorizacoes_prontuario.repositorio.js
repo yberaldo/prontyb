@@ -68,6 +68,16 @@ module.exports = {
     return rows;
   },
 
+  async marcarRevisada(fastify, prontuario_id, monitorizacao_extraida_id) {
+    const sql = `
+      UPDATE monitorizacoes_extraidas
+      SET status = 'revisado'
+      WHERE id = ? AND prontuario_id = ? AND status = 'extraido'
+    `;
+    const [result] = await fastify.mysql.execute(sql, [monitorizacao_extraida_id, prontuario_id]);
+    return result.affectedRows;
+  },
+
   async processarManualEstruturado(fastify, { prontuario_id, monitorizacao_extraida_id, colunas_json, dados_json, linhas }) {
     const conn = await fastify.mysql.getConnection();
 
