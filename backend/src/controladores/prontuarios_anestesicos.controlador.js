@@ -80,7 +80,8 @@ module.exports = {
 
       try {
         const criado = await servico.criar(request.server, body);
-        return reply.code(201).send({ ok: true, dados: criado });
+        const dados = servico._serialize(criado);
+        return reply.code(201).send({ ok: true, dados });
       } catch (err) {
         if (err && err.code === 'BAD_REQUEST') return reply.code(400).send({ ok: false, mensagem: err.message });
         if (err && err.code === 'DUPLICATE') return reply.code(400).send({ ok: false, mensagem: 'numero_prontuario duplicado' });
@@ -108,7 +109,8 @@ module.exports = {
       try {
         const atualizado = await servico.atualizar(request.server, id, body);
         if (!atualizado) return reply.code(404).send({ ok: false, mensagem: 'prontuario nao encontrado' });
-        return reply.send({ ok: true, dados: atualizado });
+        const dados = servico._serialize(atualizado);
+        return reply.send({ ok: true, dados });
       } catch (err) {
         if (err && err.code === 'BAD_REQUEST') return reply.code(400).send({ ok: false, mensagem: err.message });
         throw err;

@@ -10,6 +10,10 @@ module.exports = {
   // Serializa um registro bruto vindo do repositório para o contrato de API
   _serialize(reg) {
     if (!reg) return null;
+
+    // helper to detect already-serialized related object
+    const isNested = v => v && typeof v === 'object' && (Object.prototype.hasOwnProperty.call(v, 'id') || Object.prototype.hasOwnProperty.call(v, 'nome'));
+
     const item = {
       id: reg.id,
       numero_prontuario: reg.numero_prontuario,
@@ -30,22 +34,38 @@ module.exports = {
       atualizado_em: reg.atualizado_em
     };
 
-    // clinica: se clinica_id for null -> null, senão objeto com id/nome
-    if (reg.clinica_id === null || typeof reg.clinica_id === 'undefined') {
+    // clinica: aceitar registro já serializado ou campos achatados
+    if (isNested(reg.clinica)) {
+      item.clinica = { id: reg.clinica.id || null, nome: reg.clinica.nome || null };
+    } else if (reg.clinica_id === null || typeof reg.clinica_id === 'undefined') {
       item.clinica = null;
     } else {
       item.clinica = { id: reg.clinica_id || null, nome: reg.clinica_nome || null };
     }
 
-    // anestesista: similar
-    if (reg.anestesista_id === null || typeof reg.anestesista_id === 'undefined') {
+    // anestesista: aceitar registro já serializado ou campos achatados
+    if (isNested(reg.anestesista)) {
+      item.anestesista = {
+        id: reg.anestesista.id || null,
+        nome: reg.anestesista.nome || null,
+        crmv: reg.anestesista.crmv || null,
+        uf: reg.anestesista.uf || null
+      };
+    } else if (reg.anestesista_id === null || typeof reg.anestesista_id === 'undefined') {
       item.anestesista = null;
     } else {
       item.anestesista = { id: reg.anestesista_id || null, nome: reg.anestesista_nome || null, crmv: reg.anestesista_crmv || null, uf: reg.anestesista_uf || null };
     }
 
-    // cirurgiao
-    if (reg.cirurgiao_id === null || typeof reg.cirurgiao_id === 'undefined') {
+    // cirurgiao: aceitar registro já serializado ou campos achatados
+    if (isNested(reg.cirurgiao)) {
+      item.cirurgiao = {
+        id: reg.cirurgiao.id || null,
+        nome: reg.cirurgiao.nome || null,
+        crmv: reg.cirurgiao.crmv || null,
+        uf: reg.cirurgiao.uf || null
+      };
+    } else if (reg.cirurgiao_id === null || typeof reg.cirurgiao_id === 'undefined') {
       item.cirurgiao = null;
     } else {
       item.cirurgiao = { id: reg.cirurgiao_id || null, nome: reg.cirurgiao_nome || null, crmv: reg.cirurgiao_crmv || null, uf: reg.cirurgiao_uf || null };
