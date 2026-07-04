@@ -18,13 +18,13 @@ module.exports = {
     }
 
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const sql = `SELECT id, nome, chave, ativo, ordem, criado_em, atualizado_em FROM categorias_farmacos ${whereSql} ORDER BY ordem ASC, nome ASC`;
+    const sql = `SELECT id, nome, chave, ativo, ordem FROM categorias_farmacos ${whereSql} ORDER BY ordem ASC, nome ASC`;
     const [rows] = await fastify.mysql.query(sql, params);
     return rows;
   },
 
   async buscarPorId(fastify, id) {
-    const sql = `SELECT id, nome, chave, ativo, ordem, criado_em, atualizado_em FROM categorias_farmacos WHERE id = ? LIMIT 1`;
+    const sql = `SELECT id, nome, chave, ativo, ordem FROM categorias_farmacos WHERE id = ? LIMIT 1`;
     const [rows] = await fastify.mysql.query(sql, [id]);
     return rows && rows.length ? rows[0] : null;
   }
