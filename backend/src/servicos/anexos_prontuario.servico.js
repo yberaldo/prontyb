@@ -38,6 +38,50 @@ async function removerArquivoSeExistir(caminho) {
   }
 }
 
+function caminhoRelativoUploadInseguro(caminho) {
+  if (!caminho || typeof caminho !== 'string' || caminho.trim() === '') return true;
+  const valor = caminho.trim();
+  const partes = valor.replace(/\\/g, '/').split('/');
+  return (
+    valor.includes('\\') ||
+    valor.includes('\0') ||
+    path.isAbsolute(valor) ||
+    path.win32.isAbsolute(valor) ||
+    /^[A-Za-z]:/.test(valor) ||
+    partes.includes('..')
+  );
+}
+
+async function removerArquivoFisicoDoAnexo(fastify, prontuario_id, anexo) {
+  const caminhoRelativo = anexo && anexo.caminho_arquivo;
+  const contextoLog = { prontuario_id, anexo_id: anexo && anexo.id, caminho_arquivo: caminhoRelativo };
+
+  if (caminhoRelativoUploadInseguro(caminhoRelativo)) {
+    fastify.log.warn(contextoLog, 'Caminho de anexo inseguro para remocao fisica');
+    return;
+  }
+
+  const diretorioProntuario = path.resolve(DIRETORIO_UPLOADS_PRONTUARIOS, String(prontuario_id));
+  const caminhoAbsoluto = path.resolve(DIRETORIO_BACKEND, caminhoRelativo);
+
+  if (!estaDentroDiretorio(diretorioProntuario, caminhoAbsoluto)) {
+    fastify.log.warn(contextoLog, 'Caminho de anexo fora do diretorio esperado');
+    return;
+  }
+
+  try {
+    const stat = await fs.stat(caminhoAbsoluto);
+    if (!stat.isFile()) {
+      fastify.log.warn(contextoLog, 'Caminho de anexo nao aponta para arquivo regular');
+      return;
+    }
+    await fs.unlink(caminhoAbsoluto);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return;
+    fastify.log.error({ ...contextoLog, erro: err && err.message ? err.message : String(err) }, 'Erro removendo arquivo fisico de anexo');
+  }
+}
+
 function validarTipoAnexo(tipo_anexo) {
   if (!tipo_anexo) throw erroValidacao('tipo_anexo obrigatorio');
   if (!TIPOS_ANEXO_PERMITIDOS.includes(tipo_anexo)) throw erroValidacao('tipo_anexo invalido');
@@ -210,6 +254,9 @@ module.exports = {
     if (!existente || existente.prontuario_id !== Number(prontuario_id)) { const err = new Error('anexo nao encontrado'); err.code = 'NOT_FOUND'; throw err; }
 
     const affected = await repositorio.remover(fastify, Number(anexo_id));
+    if (affected > 0) {
+      await removerArquivoFisicoDoAnexo(fastify, prontuario_id, existente);
+    }
     return affected > 0;
   }
 };
