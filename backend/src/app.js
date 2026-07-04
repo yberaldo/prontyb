@@ -6,6 +6,7 @@ const pluginBanco = require('./plugins/banco');
 const saudeRotas = require('./rotas/saude.rotas');
 const bancoRotas = require('./rotas/banco.rotas');
 const clinicasRotas = require('./rotas/clinicas.rotas');
+const profissionaisRotas = require('./rotas/profissionais.rotas');
 
 function criarApp() {
   // cria instancia do fastify com logger
@@ -19,6 +20,7 @@ function criarApp() {
 
   // registrar rotas com prefixo /api
   app.register(clinicasRotas, { prefix: '/api' });
+  app.register(profissionaisRotas, { prefix: '/api' });
   app.register(saudeRotas, { prefix: '/api' });
   app.register(bancoRotas, { prefix: '/api' });
 
