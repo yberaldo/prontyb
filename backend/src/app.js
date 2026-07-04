@@ -13,6 +13,7 @@ const dosesFarmacosRotas = require('./rotas/doses_farmacos.rotas');
 const prontuariosRotas = require('./rotas/prontuarios_anestesicos.rotas');
 const medicacoesProntuarioRotas = require('./rotas/medicacoes_prontuario.rotas');
 const fluidoterapiasProntuarioRotas = require('./rotas/fluidoterapias_prontuario.rotas');
+const anexosProntuarioRotas = require('./rotas/anexos_prontuario.rotas');
 
 function criarApp() {
   // cria instancia do fastify com logger
@@ -33,6 +34,7 @@ function criarApp() {
   app.register(prontuariosRotas, { prefix: '/api' });
   app.register(medicacoesProntuarioRotas, { prefix: '/api' });
   app.register(fluidoterapiasProntuarioRotas, { prefix: '/api' });
+  app.register(anexosProntuarioRotas, { prefix: '/api' });
   app.register(saudeRotas, { prefix: '/api' });
   app.register(bancoRotas, { prefix: '/api' });
 
