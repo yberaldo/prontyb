@@ -3,8 +3,11 @@
 const servico = require('../servicos/medicacoes_prontuario.servico');
 
 function isPositiveIntValue(v) {
-  const n = parseInt(v, 10);
-  return !isNaN(n) && n > 0;
+  if (typeof v !== 'string' && typeof v !== 'number') return false;
+  const s = String(v);
+  if (!/^[1-9][0-9]*$/.test(s)) return false;
+  const n = Number(s);
+  return Number.isSafeInteger(n) && n > 0;
 }
 
 module.exports = {
