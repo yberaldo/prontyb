@@ -11,6 +11,14 @@ function parseBooleanParam(valor) {
   return null;
 }
 
+function isPositiveIntValue(v) {
+  if (typeof v !== 'string' && typeof v !== 'number') return false;
+  const s = String(v);
+  if (!/^[1-9][0-9]*$/.test(s)) return false;
+  const n = Number(s);
+  return Number.isSafeInteger(n) && n > 0;
+}
+
 module.exports = {
   async listar(request, reply) {
     try {
@@ -37,9 +45,9 @@ module.exports = {
 
   async buscarPorId(request, reply) {
     try {
-      const id = parseInt(request.params.id, 10);
-      if (isNaN(id) || id <= 0) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
-      const registro = await servico.obterPorId(request.server, id);
+      const idParam = request.params && request.params.id;
+      if (!isPositiveIntValue(idParam)) return reply.code(400).send({ ok: false, mensagem: 'id invalido' });
+      const registro = await servico.obterPorId(request.server, Number(idParam));
       if (!registro) return reply.code(404).send({ ok: false, mensagem: 'categoria nao encontrada' });
       return reply.send({ ok: true, dados: registro });
     } catch (err) {
