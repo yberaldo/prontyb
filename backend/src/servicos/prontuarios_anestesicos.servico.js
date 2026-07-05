@@ -2,8 +2,27 @@
 
 const repositorio = require('../repositorios/prontuarios_anestesicos.repositorio');
 
-function isPositiveInt(v) {
-  return Number.isInteger(v) && v > 0;
+// Valida e normaliza IDs vindos do body.
+// Aceita números inteiros seguros positivos (tipo number) ou
+// strings CANÔNICAS que batem com /^[1-9][0-9]*$/.
+// Retorna o número (tipo number) se válido, ou lança Error BAD_REQUEST.
+function parseAndValidateId(raw, field) {
+  const throwInvalid = () => { const err = new Error(`${field} invalido`); err.code = 'BAD_REQUEST'; throw err; };
+
+  if (typeof raw === 'number') {
+    if (!Number.isSafeInteger(raw) || raw <= 0) return throwInvalid();
+    return raw;
+  }
+
+  if (typeof raw === 'string') {
+    if (!/^[1-9][0-9]*$/.test(raw)) return throwInvalid();
+    const n = Number(raw);
+    if (!Number.isSafeInteger(n) || n <= 0) return throwInvalid();
+    return n;
+  }
+
+  // boolean, object, array, undefined, null (when called) -> inválido
+  return throwInvalid();
 }
 
 module.exports = {
@@ -95,13 +114,11 @@ module.exports = {
       }
     }
 
-    // validar tipos basicos
-    if (!isPositiveInt(Number(dados.anestesista_id))) {
-      const err = new Error('anestesista_id invalido'); err.code = 'BAD_REQUEST'; throw err;
-    }
+    // validar tipos basicos (anestesista_id é obrigatório conforme migration)
+    dados.anestesista_id = parseAndValidateId(dados.anestesista_id, 'anestesista_id');
 
     if (Object.prototype.hasOwnProperty.call(dados, 'clinica_id') && dados.clinica_id !== null && dados.clinica_id !== undefined) {
-      if (!isPositiveInt(Number(dados.clinica_id))) { const err = new Error('clinica_id invalido'); err.code = 'BAD_REQUEST'; throw err; }
+      dados.clinica_id = parseAndValidateId(dados.clinica_id, 'clinica_id');
       const [rows] = await fastify.mysql.query('SELECT id FROM clinicas WHERE id = ? LIMIT 1', [dados.clinica_id]);
       if (!rows || rows.length === 0) { const err = new Error('clinica inexistente'); err.code = 'BAD_REQUEST'; throw err; }
     }
@@ -111,7 +128,7 @@ module.exports = {
     if (!aRows || aRows.length === 0) { const err = new Error('anestesista inexistente'); err.code = 'BAD_REQUEST'; throw err; }
 
     if (Object.prototype.hasOwnProperty.call(dados, 'cirurgiao_id') && dados.cirurgiao_id !== null && dados.cirurgiao_id !== undefined) {
-      if (!isPositiveInt(Number(dados.cirurgiao_id))) { const err = new Error('cirurgiao_id invalido'); err.code = 'BAD_REQUEST'; throw err; }
+      dados.cirurgiao_id = parseAndValidateId(dados.cirurgiao_id, 'cirurgiao_id');
       const [cRows] = await fastify.mysql.query('SELECT id FROM profissionais WHERE id = ? LIMIT 1', [dados.cirurgiao_id]);
       if (!cRows || cRows.length === 0) { const err = new Error('cirurgiao inexistente'); err.code = 'BAD_REQUEST'; throw err; }
     }
@@ -142,22 +159,23 @@ module.exports = {
     }
 
     if (Object.prototype.hasOwnProperty.call(dados, 'anestesista_id')) {
-      if (!isPositiveInt(Number(dados.anestesista_id))) { const err = new Error('anestesista_id invalido'); err.code = 'BAD_REQUEST'; throw err; }
+      // manter a semântica atual: presença da chave exige valor válido (null não é aceito aqui)
+      dados.anestesista_id = parseAndValidateId(dados.anestesista_id, 'anestesista_id');
       const [aRows] = await fastify.mysql.query('SELECT id FROM profissionais WHERE id = ? LIMIT 1', [dados.anestesista_id]);
       if (!aRows || aRows.length === 0) { const err = new Error('anestesista inexistente'); err.code = 'BAD_REQUEST'; throw err; }
     }
 
     if (Object.prototype.hasOwnProperty.call(dados, 'clinica_id')) {
-      if (dados.clinica_id !== null && dados.clinica_id !== undefined && !isPositiveInt(Number(dados.clinica_id))) { const err = new Error('clinica_id invalido'); err.code = 'BAD_REQUEST'; throw err; }
       if (dados.clinica_id !== null && dados.clinica_id !== undefined) {
+        dados.clinica_id = parseAndValidateId(dados.clinica_id, 'clinica_id');
         const [rows] = await fastify.mysql.query('SELECT id FROM clinicas WHERE id = ? LIMIT 1', [dados.clinica_id]);
         if (!rows || rows.length === 0) { const err = new Error('clinica inexistente'); err.code = 'BAD_REQUEST'; throw err; }
       }
     }
 
     if (Object.prototype.hasOwnProperty.call(dados, 'cirurgiao_id')) {
-      if (dados.cirurgiao_id !== null && dados.cirurgiao_id !== undefined && !isPositiveInt(Number(dados.cirurgiao_id))) { const err = new Error('cirurgiao_id invalido'); err.code = 'BAD_REQUEST'; throw err; }
       if (dados.cirurgiao_id !== null && dados.cirurgiao_id !== undefined) {
+        dados.cirurgiao_id = parseAndValidateId(dados.cirurgiao_id, 'cirurgiao_id');
         const [cRows] = await fastify.mysql.query('SELECT id FROM profissionais WHERE id = ? LIMIT 1', [dados.cirurgiao_id]);
         if (!cRows || cRows.length === 0) { const err = new Error('cirurgiao inexistente'); err.code = 'BAD_REQUEST'; throw err; }
       }
