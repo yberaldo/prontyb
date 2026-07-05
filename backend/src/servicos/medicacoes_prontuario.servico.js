@@ -8,6 +8,39 @@ function isPositiveInt(v) {
   return Number.isInteger(v) && v > 0;
 }
 
+function parsePositiveIntCanonical(fieldName, value) {
+  // Accept number: must be safe integer > 0
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      const err = new Error(`${fieldName} invalido`);
+      err.code = 'BAD_REQUEST';
+      throw err;
+    }
+    return value;
+  }
+
+  // Accept string: must match canonical integer format (no leading zeros, no spaces, no decimals)
+  if (typeof value === 'string') {
+    if (!/^[1-9][0-9]*$/.test(value)) {
+      const err = new Error(`${fieldName} invalido`);
+      err.code = 'BAD_REQUEST';
+      throw err;
+    }
+    const n = Number(value);
+    if (!Number.isSafeInteger(n) || n <= 0) {
+      const err = new Error(`${fieldName} invalido`);
+      err.code = 'BAD_REQUEST';
+      throw err;
+    }
+    return n;
+  }
+
+  // reject booleans, objects, arrays, null, undefined, etc.
+  const err = new Error(`${fieldName} invalido`);
+  err.code = 'BAD_REQUEST';
+  throw err;
+}
+
 module.exports = {
   _serialize(reg) {
     if (!reg) return null;
@@ -74,19 +107,19 @@ module.exports = {
       }
     }
 
-    // validar tipos básicos
-    if (!isPositiveInt(Number(dados.farmaco_id))) { const err = new Error('farmaco_id invalido'); err.code = 'BAD_REQUEST'; throw err; }
+    // validar tipos básicos e obter id numerico canônico
+    const farmacoId = parsePositiveIntCanonical('farmaco_id', dados.farmaco_id);
 
     // validar existencia do farmaco
-    const farmaco = await farmacosRepo.buscarPorId(fastify, Number(dados.farmaco_id));
+    const farmaco = await farmacosRepo.buscarPorId(fastify, farmacoId);
     if (!farmaco) { const err = new Error('farmaco inexistente'); err.code = 'BAD_REQUEST'; throw err; }
 
     // validar FK composta farmaco_id + subcategoria <-> farmacos_categorias
-    const okCombo = await repositorio.existeFarmacosCategoria(fastify, Number(dados.farmaco_id), dados.subcategoria);
+    const okCombo = await repositorio.existeFarmacosCategoria(fastify, farmacoId, dados.subcategoria);
     if (!okCombo) { const err = new Error('combinacao farmaco_id/subcategoria invalida'); err.code = 'BAD_REQUEST'; throw err; }
 
-    // montar dados a inserir
-    const toInsert = Object.assign({}, dados, { prontuario_id: prontuario_id });
+    // montar dados a inserir (garantir farmaco_id numerico canônico)
+    const toInsert = Object.assign({}, dados, { prontuario_id: prontuario_id, farmaco_id: farmacoId });
     try {
       const insertId = await repositorio.criar(fastify, toInsert);
       const row = await repositorio.buscarPorId(fastify, insertId);
@@ -118,9 +151,11 @@ module.exports = {
     }
 
     if (Object.prototype.hasOwnProperty.call(dados, 'farmaco_id')) {
-      if (!isPositiveInt(Number(dados.farmaco_id))) { const err = new Error('farmaco_id invalido'); err.code = 'BAD_REQUEST'; throw err; }
-      const farmaco = await farmacosRepo.buscarPorId(fastify, Number(dados.farmaco_id));
+      const farmacoId = parsePositiveIntCanonical('farmaco_id', dados.farmaco_id);
+      const farmaco = await farmacosRepo.buscarPorId(fastify, farmacoId);
       if (!farmaco) { const err = new Error('farmaco inexistente'); err.code = 'BAD_REQUEST'; throw err; }
+      // normalize body value to numeric for repository
+      dados.farmaco_id = farmacoId;
     }
 
     if (Object.prototype.hasOwnProperty.call(dados, 'subcategoria') || Object.prototype.hasOwnProperty.call(dados, 'farmaco_id')) {
