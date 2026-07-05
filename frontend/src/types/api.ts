@@ -1,0 +1,94 @@
+export type ApiEnvelope<T> =
+  | {
+      ok: true;
+      dados: T;
+      mensagem?: string;
+    }
+  | {
+      ok: false;
+      mensagem?: string;
+      dados?: unknown;
+    };
+
+export interface ProntuarioAnestesico {
+  id: number;
+  numero_prontuario?: string | null;
+  clinica_id?: number | null;
+  nome_animal?: string | null;
+  especie?: string | null;
+  raca?: string | null;
+  sexo?: string | null;
+  idade?: string | number | null;
+  peso?: string | number | null;
+  nome_tutor?: string | null;
+  nome_procedimento?: string | null;
+  data_procedimento?: string | null;
+  cirurgiao_id?: number | null;
+  anestesista_id?: number | null;
+  observacoes_pre_anestesicas?: string | null;
+  criado_em?: string | null;
+  atualizado_em?: string | null;
+  clinica_nome?: string | null;
+  anestesista_nome?: string | null;
+  anestesista_crmv?: string | null;
+  anestesista_uf?: string | null;
+  cirurgiao_nome?: string | null;
+  cirurgiao_crmv?: string | null;
+  cirurgiao_uf?: string | null;
+}
+
+export interface MedicacaoProntuario {
+  id: number;
+  prontuario_id: number;
+  categoria?: string | null;
+  subcategoria?: string | null;
+  farmaco_id?: number | null;
+  dose_selecionada?: string | number | null;
+  dose_digitada?: string | number | null;
+  unidade?: string | null;
+  motivo_uso?: string | null;
+  ordem?: number | null;
+  farmaco_nome?: string | null;
+  farmaco_unidade_padrao?: string | null;
+  farmaco_concentracao_padrao?: string | null;
+  farmaco_permite_dose_livre?: boolean | number | null;
+  farmaco_ativo?: boolean | number | null;
+}
+
+export interface FluidoterapiaProntuario {
+  id: number;
+  prontuario_id: number;
+  fluido?: string | null;
+  taxa_ml_kg_h?: string | number | null;
+  desafio_hidrico_realizado?: boolean | number | null;
+  desafio_volume_ml_kg?: string | number | null;
+  desafio_tempo_min?: string | number | null;
+  desafio_quantidade?: string | number | null;
+  desafio_motivo?: string | null;
+}
+
+export interface AnexoProntuario {
+  id: number;
+  prontuario_id: number;
+  tipo_anexo?: string | null;
+  nome_arquivo?: string | null;
+  caminho_arquivo?: string | null;
+  mime_type?: string | null;
+  tamanho_bytes?: number | null;
+  criado_em?: string | null;
+}
+
+export interface MonitorizacaoProntuario {
+  id: number;
+  prontuario_id: number;
+  anexo_id?: number | null;
+  dados_json?: string | Record<string, unknown> | null;
+  colunas_json?: string | string[] | null;
+  status?: string | null;
+  criado_em?: string | null;
+  atualizado_em?: string | null;
+  anexo_nome_arquivo?: string | null;
+  anexo_tipo_anexo?: string | null;
+  anexo_mime_type?: string | null;
+  anexo_tamanho_bytes?: number | null;
+}
