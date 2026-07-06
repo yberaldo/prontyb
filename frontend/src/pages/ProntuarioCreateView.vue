@@ -5,19 +5,184 @@ import { listarAnestesistas, listarCirurgioes } from '../api/profissionais';
 import { criarProntuario } from '../api/prontuarios';
 import type { Clinica, CriarProntuarioPayload, Profissional, ProntuarioAnestesico } from '../types/api';
 
+const RACAS = [
+  'Affenpinscher',
+  'Afghan hound',
+  'Airedale terrier',
+  'Akita americano',
+  'Akita Inu',
+  'American Pit Bull',
+  'American staffordshire terrier',
+  'Australian cattle dog',
+  'Australian silky terrier',
+  'Australian terrier',
+  'Barbet',
+  'Galgo russo/Borzoi',
+  'Basenji',
+  'Basset Hound',
+  'Beagle',
+  'Beagle Harrier',
+  'Bearded Collie',
+  'Beauceron',
+  'Bedlington terrier',
+  'Bergamasco',
+  'Bernese mountain dog',
+  'Bichon bolonhês',
+  'Bichon Frisé',
+  'Bichon havanê',
+  'Bichon maltês',
+  'Bloodhound',
+  'Boerboel',
+  'Boiadeiro Bernês',
+  'Boiadeiro de Flandres',
+  'Border Collie',
+  'Boston terrier',
+  'Boxer',
+  'Braco alemão',
+  'Briard',
+  'Buldogue americano',
+  'Buldogue campeiro',
+  'Buldogue francês',
+  'Buldogue inglês',
+  'Bull Terrier',
+  'Bulmastife',
+  'Cairn terrier',
+  'Cane Corso',
+  "Cão d'água português",
+  'Cão pelado Mexicano',
+  'Cavalier king Charles spaniel',
+  'Chihuahua',
+  'Chinese cristed dog',
+  'Chow Chow',
+  'Clumber spaniel',
+  'Cocker spaniel americano',
+  'Cocker spaniel inglês',
+  'Collie',
+  'Coton de Tulear',
+  'Curly-coated retriever',
+  'Dachshund',
+  'Dálmata',
+  'Dandie Dinmont terrier',
+  'Deerhound',
+  'Doberman',
+  'Dogo argentino',
+  'Dogue alemão',
+  'Dogue de Bordeaux',
+  'Elkhound norueguês',
+  'Fila brasileiro',
+  'Flat-coated retriever',
+  'Fox paulistinha',
+  'Fox terrier',
+  'Foxhound americano',
+  'Golden retriever',
+  'Grande Boiadeiro suíço',
+  'Greyhound',
+  'Harrier',
+  'Husky siberiano',
+  'Irish wolfhound',
+  'Italian greyhound/Pequeno galgo italiano',
+  'Jack Russel terrier',
+  'Kerry blue terrier',
+  'King Charles Spaniel',
+  'Komondor',
+  'Kuvasz',
+  'Labrador retriever',
+  'Lakeland terrier',
+  'Lhasa apso',
+  'Malamute do Alasca',
+  'Maltês',
+  'Mastiff',
+  'Mastim napolitano',
+  'Norwich terrier',
+  'Old English sheepdog/Bobtail',
+  'Outra raça exótica Grande Porte',
+  'Outra raça exótica P/M Porte',
+  'Papillon',
+  'Pastor Alemão',
+  'Pastor Alemão Branco',
+  'Pastor Australiano',
+  'Pastor Belga Groenandel',
+  'Pastor Belga Lakinois',
+  'Pastor Belga Malinois',
+  'Pastor Belga Tervuren',
+  'Pastor Branco Suíço',
+  'Pastor de Brie',
+  'Pastor de Shetland',
+  'Pastor dos Pirineus/Cão dos pirineus',
+  'Pequeno cão holandês',
+  'Pequeno cão leão/Spitz alemão',
+  'Pequinês',
+  'Perdigueiro alemão',
+  'Perdigueiro de Burgos',
+  'Perdigueiro português',
+  'Pinscher',
+  'Pit Bull',
+  'Podengo português',
+  'Pointer inglês',
+  'Poodle standard',
+  'Poodle Toy/Microtoy',
+  'Pug',
+  'Puli',
+  'Pumi',
+  'Retriever do Labrador',
+  'Rhodesian/Ridgeback',
+  'Rottweiler',
+  'Sabujo',
+  'Saluki',
+  'Samoyeda',
+  'São Bernardo',
+  'Schnauzer Gigante',
+  'Schnauzer',
+  'Scottish terrier',
+  'Sealyham terrier',
+  'Vira-lata / Sem Raça Definida Grande Porte',
+  'Vira-lata / Sem Raça Definida P/M Porte',
+  'Setter Gordon',
+  'Setter inglês',
+  'Setter Irlandês',
+  'Shar Pei',
+  'Shiba Inu',
+  'Shih tzu',
+  'Skye terrier',
+  'Spaniel Bretão',
+  'Spitz alemão',
+  'Springer spaniel',
+  'Staffordshire bull terrier',
+  'Sussex spaniel',
+  'Teckel/Daschund',
+  'Terranova',
+  'Terrier brasileiro de pêlo curto',
+  'Terrier tibetano',
+  'Tosa',
+  'Toy Fox terrier',
+  'Toy Manchester terrier',
+  'Veadeiro Pampeano',
+  'Vizsla',
+  'Vulpino Italiano',
+  'Weimaraner',
+  'Welsh Corgi Cardigan',
+  'Welsh Corgi Pembroke',
+  'Welsh springer spaniel',
+  'West highland white terrier (Westie)',
+  'Whippet',
+  'Yorkshire terrier',
+  'American Bully',
+  'Biewer Terrier',
+];
+
 const emit = defineEmits<{
   back: [];
   created: [prontuario: ProntuarioAnestesico];
 }>();
 
 const form = reactive({
-  numero_prontuario: '',
   clinica_id: '',
   nome_animal: '',
   especie: '',
   raca: '',
   sexo: '',
-  idade: '',
+  idade_valor: '',
+  idade_unidade: 'anos',
   peso: '',
   nome_tutor: '',
   nome_procedimento: '',
@@ -64,9 +229,25 @@ function optionalId(value: string) {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+function buildIdade() {
+  const idadeValor = trimmed(form.idade_valor);
+  if (idadeValor === null) return null;
+
+  const valor = Number(idadeValor);
+  if (!Number.isSafeInteger(valor) || valor < 1 || valor > 30) {
+    setError('Idade deve ser um numero inteiro entre 1 e 30.');
+    return undefined;
+  }
+
+  if (form.idade_unidade === 'meses') {
+    return valor === 1 ? '1 mês' : `${valor} meses`;
+  }
+
+  return valor === 1 ? '1 ano' : `${valor} anos`;
+}
+
 function buildPayload(): CriarProntuarioPayload | null {
   const required = [
-    ['numero_prontuario', 'Numero do prontuario'],
     ['nome_animal', 'Nome do animal'],
     ['especie', 'Especie'],
     ['nome_tutor', 'Nome do tutor'],
@@ -80,6 +261,11 @@ function buildPayload(): CriarProntuarioPayload | null {
       setError(`${label} e obrigatorio.`);
       return null;
     }
+  }
+
+  if (form.especie !== 'canina' && form.especie !== 'felina') {
+    setError('Selecione uma especie valida.');
+    return null;
   }
 
   const anestesistaId = optionalId(form.anestesista_id);
@@ -97,10 +283,12 @@ function buildPayload(): CriarProntuarioPayload | null {
     }
   }
 
+  const idade = buildIdade();
+  if (typeof idade === 'undefined') return null;
+
   const payload: CriarProntuarioPayload = {
-    numero_prontuario: form.numero_prontuario.trim(),
     nome_animal: form.nome_animal.trim(),
-    especie: form.especie.trim(),
+    especie: form.especie,
     nome_tutor: form.nome_tutor.trim(),
     nome_procedimento: form.nome_procedimento.trim(),
     data_procedimento: form.data_procedimento,
@@ -111,7 +299,6 @@ function buildPayload(): CriarProntuarioPayload | null {
   const cirurgiaoId = optionalId(form.cirurgiao_id);
   const raca = trimmed(form.raca);
   const sexo = trimmed(form.sexo);
-  const idade = trimmed(form.idade);
   const observacoes = trimmed(form.observacoes_pre_anestesicas);
   const pesoNumber = peso === null ? null : Number(peso.replace(',', '.'));
 
@@ -204,10 +391,7 @@ onMounted(loadOptions);
         </div>
 
         <div class="form-grid">
-          <label class="field">
-            <span>Numero do prontuario</span>
-            <input v-model="form.numero_prontuario" autocomplete="off" required type="text" />
-          </label>
+          <p class="form-note field-wide">Numero gerado automaticamente ao salvar.</p>
 
           <label class="field">
             <span>Data do procedimento</span>
@@ -221,7 +405,11 @@ onMounted(loadOptions);
 
           <label class="field">
             <span>Especie</span>
-            <input v-model="form.especie" autocomplete="off" required type="text" />
+            <select v-model="form.especie" required>
+              <option value="">Selecione</option>
+              <option value="canina">Canina</option>
+              <option value="felina">Felina</option>
+            </select>
           </label>
 
           <label class="field">
@@ -277,7 +465,10 @@ onMounted(loadOptions);
 
           <label class="field">
             <span>Raca</span>
-            <input v-model="form.raca" autocomplete="off" type="text" />
+            <input v-model="form.raca" autocomplete="off" list="racas-lista" type="text" />
+            <datalist id="racas-lista">
+              <option v-for="raca in RACAS" :key="raca" :value="raca" />
+            </datalist>
           </label>
 
           <label class="field">
@@ -287,7 +478,15 @@ onMounted(loadOptions);
 
           <label class="field">
             <span>Idade</span>
-            <input v-model="form.idade" autocomplete="off" type="text" />
+            <input v-model="form.idade_valor" autocomplete="off" inputmode="numeric" max="30" min="1" step="1" type="number" />
+          </label>
+
+          <label class="field">
+            <span>Unidade da idade</span>
+            <select v-model="form.idade_unidade">
+              <option value="meses">Meses</option>
+              <option value="anos">Anos</option>
+            </select>
           </label>
 
           <label class="field">

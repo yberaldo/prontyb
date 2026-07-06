@@ -83,8 +83,7 @@ module.exports = {
 
       try {
         const criado = await servico.criar(request.server, body);
-        const dados = servico._serialize(criado);
-        return reply.code(201).send({ ok: true, dados });
+        return reply.code(201).send({ ok: true, dados: criado });
       } catch (err) {
         if (err && err.code === 'BAD_REQUEST') return reply.code(400).send({ ok: false, mensagem: err.message });
         if (err && err.code === 'DUPLICATE') return reply.code(400).send({ ok: false, mensagem: 'numero_prontuario duplicado' });

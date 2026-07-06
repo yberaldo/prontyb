@@ -25,6 +25,14 @@ function parseAndValidateId(raw, field) {
   return throwInvalid();
 }
 
+function numeroAutomatico(id) {
+  return `PR-${String(id).padStart(6, '0')}`;
+}
+
+function numeroTemporario() {
+  return `TMP-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+}
+
 module.exports = {
   // Serializa um registro bruto vindo do repositório para o contrato de API
   _serialize(reg) {
@@ -105,13 +113,18 @@ module.exports = {
 
   async criar(fastify, dados) {
     // validar campos obrigatorios conforme migration
-    const required = ['numero_prontuario','nome_animal','especie','nome_tutor','nome_procedimento','data_procedimento','anestesista_id'];
+    const required = ['nome_animal','especie','nome_tutor','nome_procedimento','data_procedimento','anestesista_id'];
     for (const f of required) {
       if (!Object.prototype.hasOwnProperty.call(dados, f) || dados[f] === null || dados[f] === undefined || (typeof dados[f] === 'string' && dados[f].trim() === '')) {
         const err = new Error(`campo obrigatorio ausente: ${f}`);
         err.code = 'BAD_REQUEST';
         throw err;
       }
+    }
+
+    const gerarNumero = !Object.prototype.hasOwnProperty.call(dados, 'numero_prontuario') || dados.numero_prontuario === null || dados.numero_prontuario === undefined || (typeof dados.numero_prontuario === 'string' && dados.numero_prontuario.trim() === '');
+    if (gerarNumero) {
+      dados.numero_prontuario = numeroTemporario();
     }
 
     // validar tipos basicos (anestesista_id é obrigatório conforme migration)
@@ -135,6 +148,9 @@ module.exports = {
 
     try {
       const insertId = await repositorio.criar(fastify, dados);
+      if (gerarNumero) {
+        await repositorio.atualizar(fastify, insertId, { numero_prontuario: numeroAutomatico(insertId) });
+      }
       const row = await repositorio.buscarPorId(fastify, insertId);
       return module.exports._serialize(row);
     } catch (err) {

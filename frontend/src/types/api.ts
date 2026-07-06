@@ -38,7 +38,7 @@ export interface ProntuarioAnestesico {
 }
 
 export interface CriarProntuarioPayload {
-  numero_prontuario: string;
+  numero_prontuario?: string;
   clinica_id?: number | null;
   nome_animal: string;
   especie: string;

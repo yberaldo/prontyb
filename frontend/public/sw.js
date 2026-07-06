@@ -1,4 +1,4 @@
-const CACHE_NAME = 'prontyb-shell-v1';
+const CACHE_NAME = 'prontyb-shell-v2';
 const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -23,6 +23,23 @@ self.addEventListener('fetch', (event) => {
   const acceptsJson = request.headers.get('accept')?.includes('application/json');
 
   if (request.method !== 'GET' || acceptsJson || url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  if (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (!response || response.status !== 200 || response.type === 'opaque') {
+            return response;
+          }
+
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
     return;
   }
 
