@@ -13,6 +13,12 @@
   box-sizing: border-box;
 }
 
+/* Evitar pull-to-refresh em navegadores que respeitam overscroll-behavior */
+html, body, #app {
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
   margin: 0;
   min-width: 320px;

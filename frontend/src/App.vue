@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import ProntuarioDetailView from './pages/ProntuarioDetailView.vue';
 import ProntuarioListView from './pages/ProntuarioListView.vue';
+import InstallPrompt from './components/InstallPrompt.vue';
 
 const selectedProntuarioId = ref<number | null>(null);
 
@@ -17,6 +18,8 @@ function backToList() {
 </script>
 
 <template>
+  <InstallPrompt />
+
   <ProntuarioListView
     v-if="selectedProntuarioId === null"
     @select-prontuario="openProntuario"
