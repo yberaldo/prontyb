@@ -42,3 +42,36 @@ export async function apiGet<T>(path: string): Promise<T> {
 
   return body.dados;
 }
+
+export async function apiPost<T, B = unknown>(path: string, payload: B): Promise<T> {
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let body: ApiEnvelope<T> | null = null;
+  try {
+    body = (await response.json()) as ApiEnvelope<T>;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    throw new ApiError(body?.mensagem || `Erro HTTP ${response.status}`, response.status);
+  }
+
+  if (!body) {
+    throw new ApiError('Resposta invalida da API', response.status);
+  }
+
+  if (!body.ok) {
+    throw new ApiError(body.mensagem || 'Erro retornado pela API', response.status);
+  }
+
+  return body.dados;
+}

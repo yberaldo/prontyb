@@ -4,7 +4,12 @@ import { listarProntuarios } from '../api/prontuarios';
 import type { ProntuarioAnestesico } from '../types/api';
 import { formatDate, formatValue } from '../utils/format';
 
+const props = defineProps<{
+  notice?: string | null;
+}>();
+
 const emit = defineEmits<{
+  createProntuario: [];
   selectProntuario: [id: number];
 }>();
 
@@ -35,12 +40,18 @@ onMounted(loadProntuarios);
         <p class="eyebrow">Prontuario Anestesico Veterinario</p>
         <h1>Prontyb</h1>
       </div>
-      <button class="primary-action" type="button" :disabled="loading" @click="loadProntuarios">
-        Atualizar
-      </button>
+      <div class="header-actions">
+        <button class="secondary-action" type="button" @click="emit('createProntuario')">
+          Novo prontuario
+        </button>
+        <button class="primary-action" type="button" :disabled="loading" @click="loadProntuarios">
+          Atualizar
+        </button>
+      </div>
     </header>
 
     <section class="content-stack">
+      <p v-if="props.notice" class="state-card state-success">{{ props.notice }}</p>
       <p v-if="loading" class="state-card">Carregando prontuarios...</p>
       <p v-else-if="error" class="state-card state-error">{{ error }}</p>
       <p v-else-if="prontuarios.length === 0" class="state-card">Nenhum prontuario encontrado.</p>

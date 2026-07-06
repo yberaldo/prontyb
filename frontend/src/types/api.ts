@@ -37,6 +37,45 @@ export interface ProntuarioAnestesico {
   cirurgiao_uf?: string | null;
 }
 
+export interface CriarProntuarioPayload {
+  numero_prontuario: string;
+  clinica_id?: number | null;
+  nome_animal: string;
+  especie: string;
+  raca?: string | null;
+  sexo?: string | null;
+  idade?: string | null;
+  peso?: number | null;
+  nome_tutor: string;
+  nome_procedimento: string;
+  data_procedimento: string;
+  cirurgiao_id?: number | null;
+  anestesista_id: number;
+  observacoes_pre_anestesicas?: string | null;
+}
+
+export interface Clinica {
+  id: number;
+  nome: string;
+  endereco?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  ativo?: boolean | number | null;
+  criado_em?: string | null;
+  atualizado_em?: string | null;
+}
+
+export interface Profissional {
+  id: number;
+  nome_completo: string;
+  crmv?: string | null;
+  uf_crmv?: string | null;
+  funcao?: 'cirurgiao' | 'anestesista' | 'ambos' | string | null;
+  ativo?: boolean | number | null;
+  criado_em?: string | null;
+  atualizado_em?: string | null;
+}
+
 export interface MedicacaoProntuario {
   id: number;
   prontuario_id: number;

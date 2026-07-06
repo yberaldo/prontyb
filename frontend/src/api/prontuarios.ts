@@ -1,6 +1,7 @@
-import { apiGet } from './client';
+import { apiGet, apiPost } from './client';
 import type {
   AnexoProntuario,
+  CriarProntuarioPayload,
   FluidoterapiaProntuario,
   MedicacaoProntuario,
   MonitorizacaoProntuario,
@@ -15,6 +16,10 @@ export function listarProntuarios() {
 
 export function buscarProntuario(id: number) {
   return apiGet<ProntuarioAnestesico>(prontuarioPath(id));
+}
+
+export function criarProntuario(payload: CriarProntuarioPayload) {
+  return apiPost<ProntuarioAnestesico, CriarProntuarioPayload>('/prontuarios_anestesicos', payload);
 }
 
 export function listarMedicacoes(id: number) {

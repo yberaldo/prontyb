@@ -69,6 +69,12 @@ button {
   overflow-wrap: anywhere;
 }
 
+.header-actions {
+  display: grid;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .eyebrow {
   margin: 0;
   color: #5a6864;
@@ -109,8 +115,13 @@ button {
   opacity: 0.68;
 }
 
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .primary-action:not(:disabled):hover,
-.secondary-action:hover {
+.secondary-action:not(:disabled):hover {
   transform: translateY(-1px);
 }
 
@@ -140,6 +151,10 @@ button {
 
 .state-error {
   color: #b42318;
+}
+
+.state-success {
+  color: #0f766e;
 }
 
 .record-card {
@@ -269,6 +284,65 @@ button {
   grid-template-columns: 1fr;
 }
 
+.form-section {
+  gap: 16px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field span {
+  color: #66746f;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(24, 33, 31, 0.16);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #18211f;
+  background: #ffffff;
+  font: inherit;
+}
+
+.field textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: #0f766e;
+  outline: 3px solid rgba(15, 118, 110, 0.16);
+}
+
+.field small {
+  color: #66746f;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 @media (min-width: 620px) {
   .app-shell {
     padding-inline: 24px;
@@ -279,10 +353,22 @@ button {
     padding-inline: 24px;
   }
 
+  .header-actions {
+    grid-template-columns: repeat(2, max-content);
+  }
+
   .summary-grid,
   .detail-grid,
   .mini-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-wide {
+    grid-column: 1 / -1;
   }
 }
 
