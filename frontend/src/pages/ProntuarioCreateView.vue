@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { listarClinicas } from '../api/clinicas';
 import { listarAnestesistas, listarCirurgioes } from '../api/profissionais';
 import { criarProntuario } from '../api/prontuarios';
-import type { Clinica, CriarProntuarioPayload, Profissional, ProntuarioAnestesico } from '../types/api';
+import type { Clinica, CriarProntuarioPayload, OrigemPaciente, Profissional, ProntuarioAnestesico } from '../types/api';
 
 const RACAS = [
   'Affenpinscher',
@@ -176,6 +176,7 @@ const emit = defineEmits<{
 }>();
 
 const form = reactive({
+  origem_paciente: 'manual' as OrigemPaciente,
   clinica_id: '',
   nome_animal: '',
   especie: '',
@@ -190,6 +191,9 @@ const form = reactive({
   cirurgiao_id: '',
   anestesista_id: '',
   observacoes_pre_anestesicas: '',
+  microchip: '',
+  data_nascimento: '',
+  petlove_id: '',
 });
 
 const clinicas = ref<Clinica[]>([]);
@@ -235,6 +239,45 @@ function optionalId(value: unknown) {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+function calcularIdadePetlove(dataNascimento: unknown) {
+  const value = textValue(dataNascimento);
+  if (!value) return null;
+
+  const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!parts) return null;
+
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const date = new Date(year, month - 1, day);
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    date.getFullYear() !== year ||
+    date.getMonth() + 1 !== month ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  const today = new Date();
+  const todayKey = (today.getFullYear() * 10000) + ((today.getMonth() + 1) * 100) + today.getDate();
+  const birthKey = (year * 10000) + (month * 100) + day;
+  if (birthKey > todayKey) return null;
+
+  let months = (today.getFullYear() - year) * 12 + ((today.getMonth() + 1) - month);
+  if (today.getDate() < day) months -= 1;
+  if (months < 0) months = 0;
+
+  if (months < 12) {
+    return months === 1 ? '1 mês' : `${months} meses`;
+  }
+
+  const years = Math.floor(months / 12);
+  return years === 1 ? '1 ano' : `${years} anos`;
+}
+
 function buildIdade() {
   const idadeValor = trimmed(form.idade_valor);
   if (idadeValor === null) return null;
@@ -251,6 +294,11 @@ function buildIdade() {
 
   return valor === 1 ? '1 ano' : `${valor} anos`;
 }
+
+const idadePetloveCalculada = computed(() => {
+  if (form.origem_paciente !== 'petlove') return '';
+  return calcularIdadePetlove(form.data_nascimento) || '';
+});
 
 function buildPayload(): CriarProntuarioPayload | null {
   const required = [
@@ -290,9 +338,6 @@ function buildPayload(): CriarProntuarioPayload | null {
     }
   }
 
-  const idade = buildIdade();
-  if (typeof idade === 'undefined') return null;
-
   const payload: CriarProntuarioPayload = {
     nome_animal: textValue(form.nome_animal),
     especie,
@@ -313,9 +358,41 @@ function buildPayload(): CriarProntuarioPayload | null {
   if (cirurgiaoId !== null) payload.cirurgiao_id = cirurgiaoId;
   if (raca !== null) payload.raca = raca;
   if (sexo !== null) payload.sexo = sexo;
-  if (idade !== null) payload.idade = idade;
   if (pesoNumber !== null) payload.peso = pesoNumber;
   if (observacoes !== null) payload.observacoes_pre_anestesicas = observacoes;
+
+  if (form.origem_paciente === 'petlove') {
+    const microchip = trimmed(form.microchip);
+    if (microchip === null) {
+      setError('Microchip e obrigatorio para paciente Petlove.');
+      return null;
+    }
+
+    const dataNascimento = trimmed(form.data_nascimento);
+    if (dataNascimento === null) {
+      setError('Data de nascimento e obrigatoria para paciente Petlove.');
+      return null;
+    }
+
+    const idadeCalculada = calcularIdadePetlove(dataNascimento);
+    if (idadeCalculada === null) {
+      setError('Data de nascimento invalida ou futura.');
+      return null;
+    }
+
+    payload.origem_paciente = 'petlove';
+    payload.microchip = microchip;
+    payload.data_nascimento = dataNascimento;
+    payload.idade = idadeCalculada;
+
+    const petloveId = optionalId(form.petlove_id);
+    if (petloveId !== null) payload.petlove_id = petloveId;
+    return payload;
+  }
+
+  const idade = buildIdade();
+  if (typeof idade === 'undefined') return null;
+  if (idade !== null) payload.idade = idade;
 
   return payload;
 }
@@ -408,6 +485,18 @@ onMounted(loadOptions);
         <div class="form-grid">
           <p class="form-note field-wide">Numero gerado automaticamente ao salvar.</p>
 
+          <label class="field field-wide">
+            <span>Paciente Petlove?</span>
+            <select v-model="form.origem_paciente">
+              <option value="manual">Não Petlove</option>
+              <option value="petlove">Petlove</option>
+            </select>
+          </label>
+
+          <p v-if="form.origem_paciente === 'petlove'" class="form-note field-wide">
+            A busca automatica na Petlove sera implementada na proxima etapa. Nesta fase, informe o microchip e confira os dados manualmente.
+          </p>
+
           <label class="field">
             <span>Data do procedimento</span>
             <input v-model="form.data_procedimento" required type="date" />
@@ -431,6 +520,23 @@ onMounted(loadOptions);
             <span>Nome do tutor</span>
             <input v-model="form.nome_tutor" autocomplete="off" required type="text" />
           </label>
+
+          <template v-if="form.origem_paciente === 'petlove'">
+            <label class="field">
+              <span>Microchip</span>
+              <input v-model="form.microchip" autocomplete="off" required type="text" />
+            </label>
+
+            <label class="field">
+              <span>Data de nascimento</span>
+              <input v-model="form.data_nascimento" required type="date" />
+            </label>
+
+            <label class="field">
+              <span>Idade calculada</span>
+              <input :value="idadePetloveCalculada || 'Nao calculada'" readonly type="text" />
+            </label>
+          </template>
 
           <label class="field">
             <span>Procedimento</span>
@@ -495,18 +601,20 @@ onMounted(loadOptions);
             </select>
           </label>
 
-          <label class="field">
-            <span>Idade</span>
-            <input v-model="form.idade_valor" autocomplete="off" inputmode="numeric" max="30" min="1" step="1" type="number" />
-          </label>
+          <template v-if="form.origem_paciente === 'manual'">
+            <label class="field">
+              <span>Idade</span>
+              <input v-model="form.idade_valor" autocomplete="off" inputmode="numeric" max="30" min="1" step="1" type="number" />
+            </label>
 
-          <label class="field">
-            <span>Unidade da idade</span>
-            <select v-model="form.idade_unidade">
-              <option value="meses">Meses</option>
-              <option value="anos">Anos</option>
-            </select>
-          </label>
+            <label class="field">
+              <span>Unidade da idade</span>
+              <select v-model="form.idade_unidade">
+                <option value="meses">Meses</option>
+                <option value="anos">Anos</option>
+              </select>
+            </label>
+          </template>
 
           <label class="field">
             <span>Peso</span>

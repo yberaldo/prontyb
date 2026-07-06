@@ -53,6 +53,7 @@ MIGS=(
   "migrations/010_criar_tabela_anexos_prontuario.sql"
   "migrations/011_criar_tabela_monitorizacoes_extraidas.sql"
   "migrations/012_criar_tabela_monitorizacao_linhas.sql"
+  "migrations/013_adicionar_campos_petlove_prontuarios.sql"
 )
 
 for m in "${MIGS[@]}"; do

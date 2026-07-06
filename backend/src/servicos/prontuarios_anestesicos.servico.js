@@ -25,6 +25,92 @@ function parseAndValidateId(raw, field) {
   return throwInvalid();
 }
 
+function parseOptionalPositiveInt(raw, field) {
+  if (raw === null || typeof raw === 'undefined' || raw === '') return null;
+  return parseAndValidateId(raw, field);
+}
+
+function normalizarOrigemPaciente(raw) {
+  if (raw === null || typeof raw === 'undefined' || raw === '') return 'manual';
+  if (typeof raw !== 'string') {
+    const err = new Error('origem_paciente invalida');
+    err.code = 'BAD_REQUEST';
+    throw err;
+  }
+  const value = raw.trim().toLowerCase();
+  if (!value) return 'manual';
+  if (value !== 'manual' && value !== 'petlove') {
+    const err = new Error('origem_paciente invalida');
+    err.code = 'BAD_REQUEST';
+    throw err;
+  }
+  return value;
+}
+
+function parseDateOnly(raw, field) {
+  if (typeof raw !== 'string') {
+    const err = new Error(`${field} invalida`);
+    err.code = 'BAD_REQUEST';
+    throw err;
+  }
+
+  const value = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const err = new Error(`${field} invalida`);
+    err.code = 'BAD_REQUEST';
+    throw err;
+  }
+
+  const [yearText, monthText, dayText] = value.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const candidate = new Date(year, month - 1, day);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    candidate.getFullYear() !== year ||
+    candidate.getMonth() + 1 !== month ||
+    candidate.getDate() !== day
+  ) {
+    const err = new Error(`${field} invalida`);
+    err.code = 'BAD_REQUEST';
+    throw err;
+  }
+
+  const today = new Date();
+  const todayKey = (today.getFullYear() * 10000) + ((today.getMonth() + 1) * 100) + today.getDate();
+  const candidateKey = (year * 10000) + (month * 100) + day;
+  if (candidateKey > todayKey) {
+    const err = new Error(`${field} futura`);
+    err.code = 'BAD_REQUEST';
+    throw err;
+  }
+
+  return value;
+}
+
+function calcularIdadeTexto(dataNascimento) {
+  const [yearText, monthText, dayText] = dataNascimento.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const today = new Date();
+
+  let meses = (today.getFullYear() - year) * 12 + ((today.getMonth() + 1) - month);
+  if (today.getDate() < day) meses -= 1;
+  if (meses < 0) meses = 0;
+
+  if (meses < 12) {
+    return meses === 1 ? '1 mês' : `${meses} meses`;
+  }
+
+  const anos = Math.floor(meses / 12);
+  return anos === 1 ? '1 ano' : `${anos} anos`;
+}
+
 function numeroAutomatico(id) {
   return `PR-${String(id).padStart(6, '0')}`;
 }
@@ -52,6 +138,10 @@ module.exports = {
       idade: reg.idade,
       peso: reg.peso,
       nome_tutor: reg.nome_tutor,
+      origem_paciente: reg.origem_paciente || 'manual',
+      microchip: reg.microchip,
+      data_nascimento: reg.data_nascimento,
+      petlove_id: reg.petlove_id,
       nome_procedimento: reg.nome_procedimento,
       data_procedimento: reg.data_procedimento,
       cirurgiao_id: reg.cirurgiao_id,
@@ -112,6 +202,9 @@ module.exports = {
   },
 
   async criar(fastify, dados) {
+    const origemPaciente = normalizarOrigemPaciente(dados.origem_paciente);
+    dados.origem_paciente = origemPaciente;
+
     // validar campos obrigatorios conforme migration
     const required = ['nome_animal','especie','nome_tutor','nome_procedimento','data_procedimento','anestesista_id'];
     for (const f of required) {
@@ -120,6 +213,32 @@ module.exports = {
         err.code = 'BAD_REQUEST';
         throw err;
       }
+    }
+
+    if (origemPaciente === 'petlove') {
+      const microchip = typeof dados.microchip === 'string' ? dados.microchip.trim() : '';
+      if (!microchip) {
+        const err = new Error('microchip obrigatorio para paciente Petlove');
+        err.code = 'BAD_REQUEST';
+        throw err;
+      }
+
+      const dataNascimentoRaw = typeof dados.data_nascimento === 'string' ? dados.data_nascimento.trim() : '';
+      if (!dataNascimentoRaw) {
+        const err = new Error('data_nascimento obrigatoria para paciente Petlove');
+        err.code = 'BAD_REQUEST';
+        throw err;
+      }
+
+      const dataNascimento = parseDateOnly(dataNascimentoRaw, 'data_nascimento');
+      dados.microchip = microchip;
+      dados.data_nascimento = dataNascimento;
+      dados.idade = calcularIdadeTexto(dataNascimento);
+      dados.petlove_id = parseOptionalPositiveInt(dados.petlove_id, 'petlove_id');
+    } else {
+      dados.microchip = null;
+      dados.data_nascimento = null;
+      dados.petlove_id = null;
     }
 
     const gerarNumero = !Object.prototype.hasOwnProperty.call(dados, 'numero_prontuario') || dados.numero_prontuario === null || dados.numero_prontuario === undefined || (typeof dados.numero_prontuario === 'string' && dados.numero_prontuario.trim() === '');
@@ -172,6 +291,56 @@ module.exports = {
     }
     if (Object.prototype.hasOwnProperty.call(dados, 'criado_em')) {
       const err = new Error('nao é permitido alterar criado_em'); err.code = 'BAD_REQUEST'; throw err;
+    }
+
+    const atual = await repositorio.buscarPorId(fastify, id);
+    if (!atual) return null;
+
+    const origemSolicitada = Object.prototype.hasOwnProperty.call(dados, 'origem_paciente')
+      ? normalizarOrigemPaciente(dados.origem_paciente)
+      : (atual.origem_paciente || 'manual');
+
+    if (origemSolicitada === 'petlove') {
+      const microchipRaw = Object.prototype.hasOwnProperty.call(dados, 'microchip') ? dados.microchip : atual.microchip;
+      const microchip = typeof microchipRaw === 'string' ? microchipRaw.trim() : '';
+      if (!microchip) {
+        const err = new Error('microchip obrigatorio para paciente Petlove');
+        err.code = 'BAD_REQUEST';
+        throw err;
+      }
+
+      const dataNascimentoRaw = Object.prototype.hasOwnProperty.call(dados, 'data_nascimento') ? dados.data_nascimento : atual.data_nascimento;
+      const dataNascimentoText = typeof dataNascimentoRaw === 'string' ? dataNascimentoRaw.trim() : '';
+      if (!dataNascimentoText) {
+        const err = new Error('data_nascimento obrigatoria para paciente Petlove');
+        err.code = 'BAD_REQUEST';
+        throw err;
+      }
+
+      const dataNascimento = parseDateOnly(dataNascimentoText, 'data_nascimento');
+      dados.microchip = microchip;
+      dados.data_nascimento = dataNascimento;
+      dados.idade = calcularIdadeTexto(dataNascimento);
+      dados.origem_paciente = 'petlove';
+      dados.petlove_id = parseOptionalPositiveInt(
+        Object.prototype.hasOwnProperty.call(dados, 'petlove_id') ? dados.petlove_id : atual.petlove_id,
+        'petlove_id'
+      );
+    } else if (origemSolicitada === 'manual') {
+      dados.origem_paciente = 'manual';
+      dados.microchip = null;
+      dados.data_nascimento = null;
+      dados.petlove_id = null;
+    } else {
+      if (Object.prototype.hasOwnProperty.call(dados, 'petlove_id')) {
+        dados.petlove_id = parseOptionalPositiveInt(dados.petlove_id, 'petlove_id');
+      }
+      if (Object.prototype.hasOwnProperty.call(dados, 'microchip') && typeof dados.microchip === 'string') {
+        dados.microchip = dados.microchip.trim() || null;
+      }
+      if (Object.prototype.hasOwnProperty.call(dados, 'data_nascimento') && typeof dados.data_nascimento === 'string') {
+        dados.data_nascimento = dados.data_nascimento.trim() || null;
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(dados, 'anestesista_id')) {
