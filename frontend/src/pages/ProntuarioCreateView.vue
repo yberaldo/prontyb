@@ -218,14 +218,20 @@ function setError(message: string) {
   scrollToFeedback();
 }
 
-function trimmed(value: string) {
-  const text = value.trim();
+function textValue(value: unknown) {
+  if (value === null || typeof value === 'undefined') return '';
+  return String(value).trim();
+}
+
+function trimmed(value: unknown) {
+  const text = textValue(value);
   return text === '' ? null : text;
 }
 
-function optionalId(value: string) {
-  if (!value) return null;
-  const id = Number(value);
+function optionalId(value: unknown) {
+  const text = textValue(value);
+  if (!text) return null;
+  const id = Number(text);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
@@ -257,13 +263,14 @@ function buildPayload(): CriarProntuarioPayload | null {
   ] as const;
 
   for (const [field, label] of required) {
-    if (!String(form[field]).trim()) {
+    if (!textValue(form[field])) {
       setError(`${label} e obrigatorio.`);
       return null;
     }
   }
 
-  if (form.especie !== 'canina' && form.especie !== 'felina') {
+  const especie = textValue(form.especie);
+  if (especie !== 'canina' && especie !== 'felina') {
     setError('Selecione uma especie valida.');
     return null;
   }
@@ -287,11 +294,11 @@ function buildPayload(): CriarProntuarioPayload | null {
   if (typeof idade === 'undefined') return null;
 
   const payload: CriarProntuarioPayload = {
-    nome_animal: form.nome_animal.trim(),
-    especie: form.especie,
-    nome_tutor: form.nome_tutor.trim(),
-    nome_procedimento: form.nome_procedimento.trim(),
-    data_procedimento: form.data_procedimento,
+    nome_animal: textValue(form.nome_animal),
+    especie,
+    nome_tutor: textValue(form.nome_tutor),
+    nome_procedimento: textValue(form.nome_procedimento),
+    data_procedimento: textValue(form.data_procedimento),
     anestesista_id: anestesistaId,
   };
 
@@ -340,7 +347,15 @@ async function submit() {
   successMessage.value = null;
   finished.value = false;
 
-  const payload = buildPayload();
+  let payload: CriarProntuarioPayload | null = null;
+  try {
+    payload = buildPayload();
+  } catch (err) {
+    console.error(err);
+    setError('Nao foi possivel preparar os dados do prontuario. Revise os campos e tente novamente.');
+    return;
+  }
+
   if (!payload) return;
 
   saving.value = true;
@@ -473,7 +488,11 @@ onMounted(loadOptions);
 
           <label class="field">
             <span>Sexo</span>
-            <input v-model="form.sexo" autocomplete="off" type="text" />
+            <select v-model="form.sexo">
+              <option value="">Selecione</option>
+              <option value="macho">Macho</option>
+              <option value="femea">Fêmea</option>
+            </select>
           </label>
 
           <label class="field">
