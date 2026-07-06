@@ -35,9 +35,22 @@ const saving = ref(false);
 const finished = ref(false);
 const error = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
+const feedbackRef = ref<HTMLElement | null>(null);
 
 function getErrorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
+}
+
+function scrollToFeedback() {
+  window.setTimeout(() => {
+    feedbackRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 0);
+}
+
+function setError(message: string) {
+  error.value = message;
+  successMessage.value = null;
+  scrollToFeedback();
 }
 
 function trimmed(value: string) {
@@ -46,7 +59,9 @@ function trimmed(value: string) {
 }
 
 function optionalId(value: string) {
-  return value ? Number(value) : null;
+  if (!value) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
 function buildPayload(): CriarProntuarioPayload | null {
@@ -62,16 +77,22 @@ function buildPayload(): CriarProntuarioPayload | null {
 
   for (const [field, label] of required) {
     if (!String(form[field]).trim()) {
-      error.value = `${label} e obrigatorio.`;
+      setError(`${label} e obrigatorio.`);
       return null;
     }
+  }
+
+  const anestesistaId = optionalId(form.anestesista_id);
+  if (anestesistaId === null) {
+    setError('Selecione um anestesista valido.');
+    return null;
   }
 
   const peso = trimmed(form.peso);
   if (peso !== null) {
     const parsed = Number(peso.replace(',', '.'));
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      error.value = 'Peso deve ser um numero maior que zero.';
+      setError('Peso deve ser um numero maior que zero.');
       return null;
     }
   }
@@ -83,7 +104,7 @@ function buildPayload(): CriarProntuarioPayload | null {
     nome_tutor: form.nome_tutor.trim(),
     nome_procedimento: form.nome_procedimento.trim(),
     data_procedimento: form.data_procedimento,
-    anestesista_id: Number(form.anestesista_id),
+    anestesista_id: anestesistaId,
   };
 
   const clinicaId = optionalId(form.clinica_id);
@@ -119,7 +140,7 @@ async function loadOptions() {
     anestesistas.value = anestesistasData;
     cirurgioes.value = cirurgioesData;
   } catch (err) {
-    error.value = getErrorMessage(err, 'Nao foi possivel carregar as listas do formulario.');
+    setError(getErrorMessage(err, 'Nao foi possivel carregar as listas do formulario.'));
   } finally {
     loadingOptions.value = false;
   }
@@ -140,9 +161,10 @@ async function submit() {
     const criado = await criarProntuario(payload);
     finished.value = true;
     successMessage.value = 'Prontuario criado com sucesso.';
+    scrollToFeedback();
     window.setTimeout(() => emit('created', criado), 350);
   } catch (err) {
-    error.value = getErrorMessage(err, 'Nao foi possivel criar o prontuario.');
+    setError(getErrorMessage(err, 'Nao foi possivel criar o prontuario.'));
   } finally {
     saving.value = false;
   }
@@ -164,15 +186,17 @@ onMounted(loadOptions);
         <p class="eyebrow">Novo prontuario</p>
         <h1>Criar prontuario</h1>
       </div>
-      <button class="primary-action" type="button" :disabled="saving || loadingOptions || finished" @click="submit">
+      <button class="primary-action" form="prontuario-create-form" type="submit" :disabled="saving || loadingOptions || finished">
         {{ saving ? 'Salvando...' : 'Salvar' }}
       </button>
     </header>
 
-    <form class="content-stack" @submit.prevent="submit">
+    <form id="prontuario-create-form" class="content-stack" novalidate @submit.prevent="submit">
       <p v-if="loadingOptions" class="state-card">Carregando listas do formulario...</p>
-      <p v-if="error" class="state-card state-error">{{ error }}</p>
-      <p v-if="successMessage" class="state-card state-success">{{ successMessage }}</p>
+      <div v-if="error || successMessage" ref="feedbackRef">
+        <p v-if="error" class="state-card state-error">{{ error }}</p>
+        <p v-if="successMessage" class="state-card state-success">{{ successMessage }}</p>
+      </div>
 
       <section class="section-block form-section">
         <div class="section-heading">
