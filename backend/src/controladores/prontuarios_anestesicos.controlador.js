@@ -75,7 +75,7 @@ module.exports = {
   async criar(request, reply) {
     try {
       const body = request.body || {};
-      const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','petlove_id','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
+      const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
       // rejeitar campos desconhecidos
       for (const k of Object.keys(body)) {
         if (!allowed.includes(k)) return reply.code(400).send({ ok: false, mensagem: 'campo desconhecido no body' });
@@ -104,7 +104,7 @@ module.exports = {
       const body = request.body || {};
       if (!body || Object.keys(body).length === 0) return reply.code(400).send({ ok: false, mensagem: 'body vazio' });
 
-      const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','petlove_id','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
+      const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
       for (const k of Object.keys(body)) {
         if (!allowed.includes(k)) return reply.code(400).send({ ok: false, mensagem: 'campo desconhecido no body' });
       }

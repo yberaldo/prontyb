@@ -56,7 +56,6 @@ export interface CriarProntuarioPayload {
   origem_paciente?: OrigemPaciente;
   microchip?: string | null;
   data_nascimento?: string | null;
-  petlove_id?: number | null;
   nome_procedimento: string;
   data_procedimento: string;
   cirurgiao_id?: number | null;
