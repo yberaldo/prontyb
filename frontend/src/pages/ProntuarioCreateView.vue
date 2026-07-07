@@ -532,10 +532,7 @@ onMounted(loadOptions);
               <input v-model="form.data_nascimento" required type="date" />
             </label>
 
-            <label class="field">
-              <span>ID Petlove</span>
-              <input v-model="form.petlove_id" type="number" inputmode="numeric" min="1" step="1" autocomplete="off" />
-            </label>
+            
 
             <label class="field">
               <span>Idade calculada</span>

@@ -151,7 +151,6 @@ onMounted(reloadAll);
         <dl v-else-if="prontuario" class="detail-grid">
           <InfoRow label="Animal" :value="prontuario.nome_animal" />
           <InfoRow label="Origem do paciente" :value="origemPacienteLabel(prontuario.origem_paciente)" />
-          <InfoRow label="ID Petlove" :value="formatValue(prontuario.petlove_id)" />
           <InfoRow label="Microchip" :value="prontuario.microchip" />
           <InfoRow label="Data de nascimento" :value="formatDate(prontuario.data_nascimento)" />
           <InfoRow label="Especie" :value="prontuario.especie" />
