@@ -77,16 +77,16 @@ GET /api/atendimento/{microchip}
   "ok": true,
   "dados": {
     "origem_paciente": "petlove",
-    "petlove_id": 1125114,
-    "microchip": "982126*********",
-    "nome_animal": "Pet Exemplo",
+    "petlove_id": "<ID_FICTICIO_PETLOVE>",
+    "microchip": "<MICROCHIP_FICTICIO>",
+    "nome_animal": "<NOME_FICTICIO_PET>",
     "especie": "canina",
-    "raca": "Yorkshire Terrier",
+    "raca": "<RACA_FICTICIA>",
     "sexo": "femea",
     "data_nascimento": "2018-05-04",
     "idade": "8 anos",
     "peso": 2.5,
-    "nome_tutor": "Tutor Exemplo"
+    "nome_tutor": "<NOME_FICTICIO_TUTOR>"
   },
   "warnings": [],
   "meta": {
@@ -94,6 +94,8 @@ GET /api/atendimento/{microchip}
   }
 }
 ```
+
+Observacao: em resposta real do backend, `petlove_id` deve ser inteiro positivo vindo apenas de fluxo confiavel no backend.
 
 ## Erros amigaveis
 
@@ -126,17 +128,14 @@ GET /api/atendimento/{microchip}
 
 ## Arquivos futuros impactados
 
-Arquivos provaveis de implementacao futura, apenas para referencia:
+Categorias que podem ser afetadas em um ciclo futuro, sem autorizar implementacao nesta fase:
 
-- `frontend/src/pages/ProntuarioCreateView.vue`
-- `frontend/src/types/api.ts`
-- `frontend/src/api/prontuarios.ts`
-- `backend/src/rotas/prontuarios_anestesicos.rotas.js`
-- `backend/src/controladores/prontuarios_anestesicos.controlador.js`
-- `backend/src/servicos/prontuarios_anestesicos.servico.js`
-- `backend/src/repositorios/prontuarios_anestesicos.repositorio.js`
-- `backend/src/servicos/petlove.servico.js`
-- eventual rota backend-only para busca por microchip
+- tela de criacao do prontuario;
+- tipos/contratos de API do frontend;
+- camada backend de consulta Petlove;
+- camada backend de normalizacao;
+- validacao de criacao/edicao do prontuario;
+- persistencia ja existente dos campos Petlove;
 
 ## Fora de escopo
 
