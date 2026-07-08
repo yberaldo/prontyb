@@ -66,6 +66,13 @@ test('autenticarPetlove retorna Authorization pronto quando login responde 200',
   });
 
   assert.equal(chamadas[0].url, 'https://central-de-saude.petlove.com.br/api/login/local');
+  assert.deepEqual(chamadas[0].opcoes.headers, {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Origin: 'https://central-de-saude.petlove.com.br',
+    Referer: 'https://central-de-saude.petlove.com.br/',
+    'X-Requested-With': 'XMLHttpRequest',
+  });
   assert.deepEqual(JSON.parse(chamadas[0].opcoes.body), {
     username: 'teste@example.com',
     password: 'senha-segura',
@@ -116,6 +123,23 @@ test('autenticarComSelecaoClinica repete login com clinic_id quando backend resp
   ]);
   assert.equal(resultado.authorization, 'Bearer TOKEN_COM_CLINICA');
   assert.equal(resultado.clinicId, '77');
+});
+
+test('obterLoginPetlove prefere PETLOVE_LOGIN_USERNAME e mantem compatibilidade com PETLOVE_LOGIN_EMAIL', () => {
+  assert.equal(
+    cli.obterLoginPetlove({
+      PETLOVE_LOGIN_USERNAME: ' usuario@exemplo.com ',
+      PETLOVE_LOGIN_EMAIL: 'email@exemplo.com',
+    }),
+    'usuario@exemplo.com',
+  );
+
+  assert.equal(
+    cli.obterLoginPetlove({
+      PETLOVE_LOGIN_EMAIL: ' email@exemplo.com ',
+    }),
+    'email@exemplo.com',
+  );
 });
 
 test('validarBaseUrlPetloveLogin aceita somente a raiz oficial da Petlove', () => {
@@ -179,6 +203,37 @@ test('main rejeita senha por prompt em ambiente nao-TTY sem chamar prompt oculto
   assert.equal(resultado.stderrTexto.includes('senha-nao-deveria-ser-usada'), false);
 });
 
+test('main usa prompt Login/E-mail Petlove quando login nao vem por ambiente', async () => {
+  let promptCapturado = '';
+  const resultado = await cli.main({
+    env: {
+      PETLOVE_BASE_URL: 'https://central-de-saude.petlove.com.br',
+      PETLOVE_LOGIN_PASSWORD: 'senha-sintetica-nao-vazar',
+      PETLOVE_AUTHORIZATION_FILE: '/tmp/petlove.authorization',
+    },
+    perguntarFn: async (prompt) => {
+      promptCapturado = prompt;
+      return 'login@exemplo.com';
+    },
+    perguntarSenhaOcultaFn: async () => 'nao-usar',
+    fetchImpl: async () => resposta(200, {
+      token_type: 'Bearer',
+      access_token: 'TOKEN_SINTETICO',
+      expires_in: 3600,
+    }),
+    fsImpl: {
+      mkdirSync() {},
+      writeFileSync() {},
+      chmodSync() {},
+    },
+    stdinImpl: { isTTY: false },
+    stdoutImpl: { isTTY: false, write() {} },
+  });
+
+  assert.equal(resultado, 0);
+  assert.match(promptCapturado, /Login\/E-mail Petlove:/);
+});
+
 test('main nao vaza senha em stdout ou stderr no sucesso', async () => {
   const resultado = await executarMainCapturandoSaida({
     env: {
@@ -227,6 +282,29 @@ test('main nao vaza senha em stdout ou stderr no erro', async () => {
   assert.equal(resultado.stderrTexto.includes('senha-sintetica-nao-vazar'), false);
 });
 
+test('main reporta status HTTP no erro 401 sem vazar body bruto', async () => {
+  const resultado = await executarMainCapturandoSaida({
+    env: {
+      PETLOVE_BASE_URL: 'https://central-de-saude.petlove.com.br',
+      PETLOVE_LOGIN_EMAIL: 'teste@example.com',
+      PETLOVE_LOGIN_PASSWORD: 'senha-sintetica-nao-vazar',
+      PETLOVE_AUTHORIZATION_FILE: '/tmp/petlove.authorization',
+    },
+    fetchImpl: async () => resposta(401, { message: 'Unauthorized', token: 'TOKEN_NAO_VAZAR' }),
+    fsImpl: {
+      mkdirSync() {},
+      writeFileSync() {},
+      chmodSync() {},
+    },
+  });
+
+  assert.equal(resultado.exitCode, 3);
+  assert.match(resultado.stdoutTexto, /"codigo": "PETLOVE_NAO_AUTORIZADA"/);
+  assert.match(resultado.stdoutTexto, /"status_http": 401/);
+  assert.equal(resultado.stdoutTexto.includes('Unauthorized'), false);
+  assert.equal(resultado.stdoutTexto.includes('TOKEN_NAO_VAZAR'), false);
+});
+
 test('autenticarPetlove sanitiza 401 como credencial invalida', async () => {
   await assert.rejects(
     cli.autenticarPetlove({
@@ -238,6 +316,7 @@ test('autenticarPetlove sanitiza 401 como credencial invalida', async () => {
     (erro) => {
       assert.equal(erro.codigo, 'PETLOVE_NAO_AUTORIZADA');
       assert.equal(erro.message, 'Credenciais Petlove invalidas.');
+      assert.equal(erro.statusHttp, 401);
       return true;
     },
   );

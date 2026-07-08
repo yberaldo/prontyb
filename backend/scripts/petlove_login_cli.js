@@ -119,6 +119,10 @@ function montarAuthorization(payload) {
   return `${tokenType} ${accessToken}`.trim();
 }
 
+function obterLoginPetlove(env = process.env) {
+  return textoSeguro(env.PETLOVE_LOGIN_USERNAME || env.PETLOVE_LOGIN_EMAIL);
+}
+
 function perguntarSenhaOculta(texto, stdinImpl = stdin, stdoutImpl = stdout) {
   if (!stdinImpl?.isTTY || !stdoutImpl?.isTTY || typeof stdinImpl.setRawMode !== 'function') {
     throw criarErroSanitizado(
@@ -242,6 +246,8 @@ async function postarJson(url, payload, fetchImpl = globalThis.fetch) {
     throw criarErroSanitizado('PETLOVE_INDISPONIVEL', 'Transporte fetch indisponivel.', 6);
   }
 
+  const origem = new URL(url).origin;
+
   let resposta;
   try {
     resposta = await fetchImpl(url, {
@@ -249,6 +255,9 @@ async function postarJson(url, payload, fetchImpl = globalThis.fetch) {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        Origin: origem,
+        Referer: `${origem}/`,
+        'X-Requested-With': 'XMLHttpRequest',
       },
       body: JSON.stringify(payload),
     });
@@ -309,10 +318,14 @@ async function autenticarPetlove({
   }
 
   if (resposta.status === 401 || resposta.status === 403) {
-    throw criarErroSanitizado('PETLOVE_NAO_AUTORIZADA', 'Credenciais Petlove invalidas.', 3);
+    const erro = criarErroSanitizado('PETLOVE_NAO_AUTORIZADA', 'Credenciais Petlove invalidas.', 3);
+    erro.statusHttp = resposta.status;
+    throw erro;
   }
 
-  throw criarErroSanitizado('PETLOVE_INDISPONIVEL', 'Falha no login Petlove.', 6);
+  const erro = criarErroSanitizado('PETLOVE_INDISPONIVEL', 'Falha no login Petlove.', 6);
+  erro.statusHttp = resposta.status;
+  throw erro;
 }
 
 function montarPromptClinicas(clinicas) {
@@ -393,9 +406,9 @@ async function main({
       textoSeguro(env.PETLOVE_BASE_URL)
       || await perguntarFn(`PETLOVE_BASE_URL (Enter para ${DEFAULT_PETLOVE_BASE_URL}): `),
     );
-    const email = validarEmail(
-      textoSeguro(env.PETLOVE_LOGIN_EMAIL)
-      || await perguntarFn('E-mail Petlove: '),
+    const login = validarEmail(
+      obterLoginPetlove(env)
+      || await perguntarFn('Login/E-mail Petlove: '),
     );
     const senha = await obterSenhaPetlove({
       env,
@@ -410,7 +423,7 @@ async function main({
 
     const autenticacao = await autenticarComSelecaoClinica({
       baseUrl,
-      email,
+      email: login,
       senha,
       perguntarFn,
       fetchImpl,
@@ -427,11 +440,17 @@ async function main({
     }, stdoutImpl);
     return 0;
   } catch (erro) {
-    imprimirJson({
+    const erroPublico = {
       ok: false,
       codigo: erro?.codigo || 'PETLOVE_ERRO_INESPERADO',
       mensagem: erro?.message || 'Erro inesperado sanitizado',
-    }, stdoutImpl);
+    };
+
+    if (erro?.statusHttp) {
+      erroPublico.status_http = erro.statusHttp;
+    }
+
+    imprimirJson(erroPublico, stdoutImpl);
     return erro?.exitCode ?? 9;
   }
 }
@@ -449,6 +468,7 @@ module.exports = {
   main,
   montarAuthorization,
   montarPromptClinicas,
+  obterLoginPetlove,
   normalizarClinicas,
   obterSenhaPetlove,
   perguntarSenhaOculta,
