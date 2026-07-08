@@ -37,7 +37,7 @@ module.exports = {
     const sql = `
       SELECT
         p.id, p.numero_prontuario, p.clinica_id, p.nome_animal, p.especie, p.raca, p.sexo, p.idade, p.peso, p.nome_tutor,
-        p.origem_paciente, p.microchip, p.data_nascimento, p.petlove_id,
+        p.origem_paciente, p.microchip, p.data_nascimento,
         p.nome_procedimento, p.data_procedimento, p.cirurgiao_id, p.anestesista_id, p.observacoes_pre_anestesicas, p.criado_em, p.atualizado_em,
         c.nome AS clinica_nome,
         a.nome_completo AS anestesista_nome, a.crmv AS anestesista_crmv, a.uf_crmv AS anestesista_uf,
@@ -58,7 +58,7 @@ module.exports = {
     const sql = `
       SELECT
         p.id, p.numero_prontuario, p.clinica_id, p.nome_animal, p.especie, p.raca, p.sexo, p.idade, p.peso, p.nome_tutor,
-        p.origem_paciente, p.microchip, p.data_nascimento, p.petlove_id,
+        p.origem_paciente, p.microchip, p.data_nascimento,
         p.nome_procedimento, p.data_procedimento, p.cirurgiao_id, p.anestesista_id, p.observacoes_pre_anestesicas, p.criado_em, p.atualizado_em,
         c.nome AS clinica_nome,
         a.nome_completo AS anestesista_nome, a.crmv AS anestesista_crmv, a.uf_crmv AS anestesista_uf,
@@ -78,7 +78,7 @@ module.exports = {
     const campos = [];
     const params = [];
 
-    const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','petlove_id','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
+    const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
     for (const k of allowed) {
       if (Object.prototype.hasOwnProperty.call(dados, k)) {
         campos.push(k);
@@ -94,7 +94,7 @@ module.exports = {
   async atualizar(fastify, id, dados = {}) {
     const campos = [];
     const params = [];
-    const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','petlove_id','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
+    const allowed = ['numero_prontuario','clinica_id','nome_animal','especie','raca','sexo','idade','peso','nome_tutor','origem_paciente','microchip','data_nascimento','nome_procedimento','data_procedimento','cirurgiao_id','anestesista_id','observacoes_pre_anestesicas'];
     for (const k of allowed) {
       if (Object.prototype.hasOwnProperty.call(dados, k)) {
         campos.push(`${k} = ?`);

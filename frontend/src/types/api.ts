@@ -26,7 +26,6 @@ export interface ProntuarioAnestesico {
   origem_paciente?: OrigemPaciente | string | null;
   microchip?: string | null;
   data_nascimento?: string | null;
-  petlove_id?: number | null;
   nome_procedimento?: string | null;
   data_procedimento?: string | null;
   cirurgiao_id?: number | null;

@@ -136,7 +136,6 @@ module.exports = {
       origem_paciente: reg.origem_paciente || 'manual',
       microchip: reg.microchip,
       data_nascimento: reg.data_nascimento,
-      petlove_id: reg.petlove_id,
       nome_procedimento: reg.nome_procedimento,
       data_procedimento: reg.data_procedimento,
       cirurgiao_id: reg.cirurgiao_id,
