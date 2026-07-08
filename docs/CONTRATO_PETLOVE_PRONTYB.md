@@ -20,8 +20,9 @@
 ## Limites e seguranca
 
 - A integracao futura deve ser server-side only.
-- O cliente comum nao pode enviar `petlove_id` arbitrario para ser aceito como confiavel.
-- O valor `petlove_id` somente deve ser aceito quando vier de fluxo confiavel do backend.
+- O identificador operacional do fluxo e o `microchip`.
+- `petlove_id`, se existir em legado de banco ou resposta interna, deve ser ignorado no fluxo novo.
+- O frontend nao deve pedir, mostrar ou enviar `petlove_id`.
 - Nao armazenar nem expor cookies, tokens, headers de autenticacao, HTML bruto ou JSON bruto completo da Petlove.
 - Nao registrar dados sensiveis em logs aplicacionais.
 - A primeira fase deve priorizar minimizacao de dados.
@@ -41,12 +42,10 @@ GET /api/atendimento/{microchip}
 
 ### Mapeamento principal
 
-- `id` -> `petlove_id`
-  - aceitar somente a partir de fluxo confiavel do backend.
-  - nunca aceitar `petlove_id` arbitrario vindo do cliente comum.
-- `name` -> `nome_animal`
-  - aplicar `trim`.
 - `microchip` -> `microchip`
+  - aplicar `trim`.
+  - e o identificador principal do fluxo Petlove no Prontyb.
+- `name` -> `nome_animal`
   - aplicar `trim`.
 - `race.name` -> `raca`
   - texto livre.
@@ -67,6 +66,9 @@ GET /api/atendimento/{microchip}
   - usar o item mais recente por `created_at`.
   - converter string decimal, como `"2.500"`, para numero `2.5`.
   - se nao houver peso valido, deixar `peso` como `null` ou vazio.
+- `petlove_id`
+  - campo legado/técnico, ignorado no contrato normalizado novo.
+  - nao deve ser solicitado pelo frontend nem usado como entrada do fluxo.
 - `plans[0].name`
   - ignorar na primeira fase, salvo decisao futura explicita.
 
@@ -77,7 +79,6 @@ GET /api/atendimento/{microchip}
   "ok": true,
   "dados": {
     "origem_paciente": "petlove",
-    "petlove_id": "<ID_FICTICIO_PETLOVE>",
     "microchip": "<MICROCHIP_FICTICIO>",
     "nome_animal": "<NOME_FICTICIO_PET>",
     "especie": "canina",
@@ -95,7 +96,7 @@ GET /api/atendimento/{microchip}
 }
 ```
 
-Observacao: em resposta real do backend, `petlove_id` deve ser inteiro positivo vindo apenas de fluxo confiavel no backend.
+Observacao: em resposta real do backend, o fluxo novo continua sendo definido pelo `microchip`; `petlove_id`, quando existir por legado, deve ser tratado como tecnico/ignorado.
 
 ## Erros amigaveis
 

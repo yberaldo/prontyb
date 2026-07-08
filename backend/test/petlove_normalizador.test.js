@@ -8,7 +8,6 @@ const { normalizarPacientePetlove, ErroNormalizacaoPetlove } = require(path.reso
 
 function basePacientePetlove() {
   return {
-    id: '123',
     name: '  Animal Ficticio  ',
     microchip: '  CHIP-FAKE-001  ',
     race: {
@@ -48,7 +47,6 @@ test('normaliza paciente feliz com cachorro, femea e peso mais recente', () => {
 
   assert.deepEqual(dados, {
     origem_paciente: 'petlove',
-    petlove_id: 123,
     microchip: 'CHIP-FAKE-001',
     nome_animal: 'Animal Ficticio',
     especie: 'canina',
@@ -60,6 +58,7 @@ test('normaliza paciente feliz com cachorro, femea e peso mais recente', () => {
   });
 
   assert.match(idade, /^\d+\s+(mes|meses|ano|anos)$/);
+  assert.equal(Object.prototype.hasOwnProperty.call(resultado, 'petlove_id'), false);
 });
 
 test('converte especie Gato para felina', () => {
@@ -159,6 +158,23 @@ test('ausencia de peso valido retorna null', () => {
   assert.equal(resultado.peso, null);
 });
 
+test('normaliza mesmo sem id no payload', () => {
+  const resultado = normalizarPacientePetlove(basePacientePetlove());
+
+  assert.equal(resultado.microchip, 'CHIP-FAKE-001');
+  assert.equal(Object.prototype.hasOwnProperty.call(resultado, 'petlove_id'), false);
+});
+
+test('ignora id invalido no payload sem falhar', () => {
+  const resultado = normalizarPacientePetlove({
+    ...basePacientePetlove(),
+    id: 'abc'
+  });
+
+  assert.equal(resultado.microchip, 'CHIP-FAKE-001');
+  assert.equal(Object.prototype.hasOwnProperty.call(resultado, 'petlove_id'), false);
+});
+
 test('birthday invalido gera erro controlado', () => {
   assertErro(() => normalizarPacientePetlove({
     ...basePacientePetlove(),
@@ -211,13 +227,4 @@ test('tutor ausente gera erro controlado', () => {
     ...basePacientePetlove(),
     user_name: '   '
   }), 'Paciente Petlove sem tutor');
-});
-
-test('id ausente ou invalido gera erro sem vazar dados sensiveis', () => {
-  for (const id of [undefined, 0, -1, 'abc', '1abc']) {
-    assertErro(() => normalizarPacientePetlove({
-      ...basePacientePetlove(),
-      id
-    }), 'Resposta Petlove invalida');
-  }
 });

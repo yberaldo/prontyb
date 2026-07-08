@@ -25,31 +25,6 @@ function normalizarTextoOpcional(valor) {
   return texto || null;
 }
 
-function normalizarIdPetlove(valor) {
-  if (typeof valor === 'number') {
-    if (!Number.isSafeInteger(valor) || valor <= 0) {
-      falhar('Resposta Petlove invalida');
-    }
-    return valor;
-  }
-
-  if (typeof valor === 'string') {
-    const texto = valor.trim();
-    if (!/^[1-9][0-9]*$/.test(texto)) {
-      falhar('Resposta Petlove invalida');
-    }
-
-    const numero = Number(texto);
-    if (!Number.isSafeInteger(numero) || numero <= 0) {
-      falhar('Resposta Petlove invalida');
-    }
-
-    return numero;
-  }
-
-  falhar('Resposta Petlove invalida');
-}
-
 function normalizarEspecie(race) {
   const nomeEspecie = trimSeguro(race && race.specie && race.specie.name)
     .normalize('NFD')
@@ -189,7 +164,6 @@ function normalizarPacientePetlove(bruto) {
     falhar('Resposta Petlove invalida');
   }
 
-  const petloveId = normalizarIdPetlove(bruto.id);
   const nomeAnimal = trimSeguro(bruto.name);
   if (!nomeAnimal) {
     falhar('Paciente Petlove sem nome do animal');
@@ -213,7 +187,6 @@ function normalizarPacientePetlove(bruto) {
 
   return {
     origem_paciente: 'petlove',
-    petlove_id: petloveId,
     microchip,
     nome_animal: nomeAnimal,
     especie,

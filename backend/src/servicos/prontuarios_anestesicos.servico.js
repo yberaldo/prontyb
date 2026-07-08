@@ -25,11 +25,6 @@ function parseAndValidateId(raw, field) {
   return throwInvalid();
 }
 
-function parseOptionalPositiveInt(raw, field) {
-  if (raw === null || typeof raw === 'undefined' || raw === '') return null;
-  return parseAndValidateId(raw, field);
-}
-
 function normalizarOrigemPaciente(raw) {
   if (raw === null || typeof raw === 'undefined' || raw === '') return 'manual';
   if (typeof raw !== 'string') {
@@ -234,11 +229,11 @@ module.exports = {
       dados.microchip = microchip;
       dados.data_nascimento = dataNascimento;
       dados.idade = calcularIdadeTexto(dataNascimento);
-      dados.petlove_id = parseOptionalPositiveInt(dados.petlove_id, 'petlove_id');
+      delete dados.petlove_id;
     } else {
       dados.microchip = null;
       dados.data_nascimento = null;
-      dados.petlove_id = null;
+      delete dados.petlove_id;
     }
 
     const gerarNumero = !Object.prototype.hasOwnProperty.call(dados, 'numero_prontuario') || dados.numero_prontuario === null || dados.numero_prontuario === undefined || (typeof dados.numero_prontuario === 'string' && dados.numero_prontuario.trim() === '');
@@ -322,18 +317,15 @@ module.exports = {
       dados.data_nascimento = dataNascimento;
       dados.idade = calcularIdadeTexto(dataNascimento);
       dados.origem_paciente = 'petlove';
-      dados.petlove_id = parseOptionalPositiveInt(
-        Object.prototype.hasOwnProperty.call(dados, 'petlove_id') ? dados.petlove_id : atual.petlove_id,
-        'petlove_id'
-      );
+      delete dados.petlove_id;
     } else if (origemSolicitada === 'manual') {
       dados.origem_paciente = 'manual';
       dados.microchip = null;
       dados.data_nascimento = null;
-      dados.petlove_id = null;
+      delete dados.petlove_id;
     } else {
       if (Object.prototype.hasOwnProperty.call(dados, 'petlove_id')) {
-        dados.petlove_id = parseOptionalPositiveInt(dados.petlove_id, 'petlove_id');
+        delete dados.petlove_id;
       }
       if (Object.prototype.hasOwnProperty.call(dados, 'microchip') && typeof dados.microchip === 'string') {
         dados.microchip = dados.microchip.trim() || null;
