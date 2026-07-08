@@ -13,7 +13,6 @@ const categoriasFarmacosRotas = require('./rotas/categorias_farmacos.rotas');
 const farmacosRotas = require('./rotas/farmacos.rotas');
 const dosesFarmacosRotas = require('./rotas/doses_farmacos.rotas');
 const prontuariosRotas = require('./rotas/prontuarios_anestesicos.rotas');
-const petloveRotas = require('./rotas/petlove.rotas');
 const medicacoesProntuarioRotas = require('./rotas/medicacoes_prontuario.rotas');
 const fluidoterapiasProntuarioRotas = require('./rotas/fluidoterapias_prontuario.rotas');
 const anexosProntuarioRotas = require('./rotas/anexos_prontuario.rotas');
@@ -45,7 +44,6 @@ function criarApp() {
   app.register(farmacosRotas, { prefix: '/api' });
   app.register(dosesFarmacosRotas, { prefix: '/api' });
   app.register(prontuariosRotas, { prefix: '/api' });
-  app.register(petloveRotas, { prefix: '/api' });
   app.register(medicacoesProntuarioRotas, { prefix: '/api' });
   app.register(fluidoterapiasProntuarioRotas, { prefix: '/api' });
   app.register(anexosProntuarioRotas, { prefix: '/api' });

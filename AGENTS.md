@@ -41,20 +41,15 @@ Regras para banco:
 - Antes de migration em produção, deve existir plano de validação e rollback.
 - Não rodar migration real sem autorização explícita.
 
-Integração Petlove:
-- A integração Petlove deve ser backend-only.
-- O frontend nunca deve receber cookie, token, Authorization ou credencial Petlove.
-- Credenciais/sessões Petlove não devem ser versionadas.
-- Não chamar Petlove real sem pedido explícito.
-- Testes devem usar mocks/stubs quando possível.
+Integrações externas:
+- Integrações externas devem ser backend-only quando envolverem credenciais.
+- O frontend nunca deve receber cookie, token ou credencial de terceiros.
+- Credenciais e sessoes de terceiros nao devem ser versionadas.
+- Nao chamar integracao real sem pedido explicito.
+- Testes devem usar mocks/stubs quando possivel.
 - O fluxo manual existente deve continuar funcionando.
-- PETLOVE_AUTHORIZATION é a credencial técnica principal para a integração.
-- Se houver persistência futura em arquivo, use apenas PETLOVE_AUTHORIZATION_FILE, fora do Git, com permissão restrita.
-- PETLOVE_AUTH_COOKIE permanece apenas como compatibilidade com fluxo legado.
-- Não recomendar PETLOVE_AUTH_COOKIE_FILE como caminho principal.
-- PETLOVE_AUTHORIZATION deve ser tratado como segredo.
-- Não salvar login/senha em script, Git, .env local, chat, Codex ou documentação.
-- Não imprimir Authorization, cookie ou credenciais em logs.
+- Credenciais devem ser tratadas como segredo.
+- Nao imprimir cookie ou credenciais em logs.
 
 Resposta final esperada:
 - Resumo técnico do que foi feito.

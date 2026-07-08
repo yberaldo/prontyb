@@ -10,8 +10,6 @@ export type ApiEnvelope<T> =
       dados?: unknown;
     };
 
-export type OrigemPaciente = 'manual' | 'petlove';
-
 export interface ProntuarioAnestesico {
   id: number;
   numero_prontuario?: string | null;
@@ -23,9 +21,6 @@ export interface ProntuarioAnestesico {
   idade?: string | number | null;
   peso?: string | number | null;
   nome_tutor?: string | null;
-  origem_paciente?: OrigemPaciente | string | null;
-  microchip?: string | null;
-  data_nascimento?: string | null;
   nome_procedimento?: string | null;
   data_procedimento?: string | null;
   cirurgiao_id?: number | null;
@@ -52,9 +47,6 @@ export interface CriarProntuarioPayload {
   idade?: string | null;
   peso?: number | null;
   nome_tutor: string;
-  origem_paciente?: OrigemPaciente;
-  microchip?: string | null;
-  data_nascimento?: string | null;
   nome_procedimento: string;
   data_procedimento: string;
   cirurgiao_id?: number | null;

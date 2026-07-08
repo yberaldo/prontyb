@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { listarClinicas } from '../api/clinicas';
-import { ApiError } from '../api/client';
-import { buscarPetlovePorMicrochip } from '../api/petlove';
 import { listarAnestesistas, listarCirurgioes } from '../api/profissionais';
 import { criarProntuario } from '../api/prontuarios';
-import type { Clinica, CriarProntuarioPayload, OrigemPaciente, Profissional, ProntuarioAnestesico } from '../types/api';
+import type { Clinica, CriarProntuarioPayload, Profissional, ProntuarioAnestesico } from '../types/api';
 
 const RACAS = [
   'Affenpinscher',
@@ -178,7 +176,6 @@ const emit = defineEmits<{
 }>();
 
 const form = reactive({
-  origem_paciente: 'manual' as OrigemPaciente,
   clinica_id: '',
   nome_animal: '',
   especie: '',
@@ -193,7 +190,6 @@ const form = reactive({
   cirurgiao_id: '',
   anestesista_id: '',
   observacoes_pre_anestesicas: '',
-  microchip: '',
 });
 
 const clinicas = ref<Clinica[]>([]);
@@ -201,11 +197,9 @@ const anestesistas = ref<Profissional[]>([]);
 const cirurgioes = ref<Profissional[]>([]);
 const loadingOptions = ref(false);
 const saving = ref(false);
-const searchingPetlove = ref(false);
 const finished = ref(false);
 const error = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
-const petloveNotice = ref<string | null>(null);
 const feedbackRef = ref<HTMLElement | null>(null);
 
 function getErrorMessage(err: unknown, fallback: string) {
@@ -258,49 +252,7 @@ function buildIdade() {
   return valor === 1 ? '1 ano' : `${valor} anos`;
 }
 
-function getPetloveErrorMessage(err: unknown) {
-  if (err instanceof ApiError) {
-    if (err.status === 503) return err.message || 'Busca Petlove nao configurada';
-    if (err.status === 400) return err.message || 'Nao foi possivel consultar o microchip informado.';
-    return err.message || 'Nao foi possivel consultar a Petlove.';
-  }
-
-  return 'Nao foi possivel consultar a Petlove. Tente novamente.';
-}
-
-async function buscarPetlove() {
-  if (searchingPetlove.value) return;
-
-  const microchip = textValue(form.microchip);
-  petloveNotice.value = null;
-
-  if (!microchip) {
-    petloveNotice.value = 'Informe um microchip.';
-    return;
-  }
-
-  if (microchip.length > 40) {
-    petloveNotice.value = 'Microchip deve ter no maximo 40 caracteres.';
-    return;
-  }
-
-  searchingPetlove.value = true;
-  try {
-    await buscarPetlovePorMicrochip(microchip);
-    petloveNotice.value = 'Busca Petlove retornou uma resposta inesperada.';
-  } catch (err) {
-    petloveNotice.value = getPetloveErrorMessage(err);
-  } finally {
-    searchingPetlove.value = false;
-  }
-}
-
 function buildPayload(): CriarProntuarioPayload | null {
-  if (form.origem_paciente === 'petlove') {
-    setError('O fluxo Petlove ainda esta bloqueado ate a busca por microchip ser implementada no backend.');
-    return null;
-  }
-
   const required = [
     ['nome_animal', 'Nome do animal'],
     ['especie', 'Especie'],
@@ -338,6 +290,9 @@ function buildPayload(): CriarProntuarioPayload | null {
     }
   }
 
+  const idade = buildIdade();
+  if (typeof idade === 'undefined') return null;
+
   const payload: CriarProntuarioPayload = {
     nome_animal: textValue(form.nome_animal),
     especie,
@@ -358,20 +313,12 @@ function buildPayload(): CriarProntuarioPayload | null {
   if (cirurgiaoId !== null) payload.cirurgiao_id = cirurgiaoId;
   if (raca !== null) payload.raca = raca;
   if (sexo !== null) payload.sexo = sexo;
+  if (idade !== null) payload.idade = idade;
   if (pesoNumber !== null) payload.peso = pesoNumber;
   if (observacoes !== null) payload.observacoes_pre_anestesicas = observacoes;
 
-  const idade = buildIdade();
-  if (typeof idade === 'undefined') return null;
-  if (idade !== null) payload.idade = idade;
-
   return payload;
 }
-
-watch(() => form.origem_paciente, () => {
-  petloveNotice.value = null;
-  searchingPetlove.value = false;
-});
 
 async function loadOptions() {
   loadingOptions.value = true;
@@ -441,7 +388,7 @@ onMounted(loadOptions);
         <p class="eyebrow">Novo prontuario</p>
         <h1>Criar prontuario</h1>
       </div>
-      <button v-if="form.origem_paciente === 'manual'" class="primary-action" form="prontuario-create-form" type="submit" :disabled="saving || loadingOptions || finished">
+      <button class="primary-action" form="prontuario-create-form" type="submit" :disabled="saving || loadingOptions || finished">
         {{ saving ? 'Salvando...' : 'Salvar' }}
       </button>
     </header>
@@ -459,72 +406,51 @@ onMounted(loadOptions);
         </div>
 
         <div class="form-grid">
-          <p v-if="form.origem_paciente === 'manual'" class="form-note field-wide">Numero gerado automaticamente ao salvar.</p>
+          <p class="form-note field-wide">Numero gerado automaticamente ao salvar.</p>
 
-          <label class="field field-wide">
-            <span>Paciente Petlove?</span>
-            <select v-model="form.origem_paciente">
-              <option value="manual">Não Petlove</option>
-              <option value="petlove">Petlove</option>
+          <label class="field">
+            <span>Data do procedimento</span>
+            <input v-model="form.data_procedimento" required type="date" />
+          </label>
+
+          <label class="field">
+            <span>Nome do animal</span>
+            <input v-model="form.nome_animal" autocomplete="off" required type="text" />
+          </label>
+
+          <label class="field">
+            <span>Especie</span>
+            <select v-model="form.especie" required>
+              <option value="">Selecione</option>
+              <option value="canina">Canina</option>
+              <option value="felina">Felina</option>
             </select>
           </label>
 
-          <template v-if="form.origem_paciente === 'petlove'">
-            <div class="field field-wide">
-              <span>Microchip</span>
-              <input v-model="form.microchip" autocomplete="off" required type="text" />
-              <button class="secondary-action" type="button" :disabled="searchingPetlove" @click="buscarPetlove">
-                {{ searchingPetlove ? 'Buscando...' : 'Buscar' }}
-              </button>
-            </div>
-            <p v-if="petloveNotice" class="form-note field-wide">{{ petloveNotice }}</p>
-          </template>
+          <label class="field">
+            <span>Nome do tutor</span>
+            <input v-model="form.nome_tutor" autocomplete="off" required type="text" />
+          </label>
 
-          <template v-else>
-            <label class="field">
-              <span>Data do procedimento</span>
-              <input v-model="form.data_procedimento" required type="date" />
-            </label>
+          <label class="field">
+            <span>Procedimento</span>
+            <input v-model="form.nome_procedimento" autocomplete="off" required type="text" />
+          </label>
 
-            <label class="field">
-              <span>Nome do animal</span>
-              <input v-model="form.nome_animal" autocomplete="off" required type="text" />
-            </label>
-
-            <label class="field">
-              <span>Especie</span>
-              <select v-model="form.especie" required>
-                <option value="">Selecione</option>
-                <option value="canina">Canina</option>
-                <option value="felina">Felina</option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>Nome do tutor</span>
-              <input v-model="form.nome_tutor" autocomplete="off" required type="text" />
-            </label>
-
-            <label class="field">
-              <span>Procedimento</span>
-              <input v-model="form.nome_procedimento" autocomplete="off" required type="text" />
-            </label>
-
-            <label class="field field-wide">
-              <span>Anestesista</span>
-              <select v-model="form.anestesista_id" :disabled="loadingOptions || anestesistas.length === 0" required>
-                <option value="">Selecione</option>
-                <option v-for="profissional in anestesistas" :key="profissional.id" :value="String(profissional.id)">
-                  {{ professionalLabel(profissional) }}
-                </option>
-              </select>
-              <small v-if="!loadingOptions && anestesistas.length === 0">Nenhum profissional encontrado.</small>
-            </label>
-          </template>
+          <label class="field field-wide">
+            <span>Anestesista</span>
+            <select v-model="form.anestesista_id" :disabled="loadingOptions || anestesistas.length === 0" required>
+              <option value="">Selecione</option>
+              <option v-for="profissional in anestesistas" :key="profissional.id" :value="String(profissional.id)">
+                {{ professionalLabel(profissional) }}
+              </option>
+            </select>
+            <small v-if="!loadingOptions && anestesistas.length === 0">Nenhum profissional encontrado.</small>
+          </label>
         </div>
       </section>
 
-      <section v-if="form.origem_paciente === 'manual'" class="section-block form-section">
+      <section class="section-block form-section">
         <div class="section-heading">
           <h2>Dados opcionais</h2>
         </div>
@@ -596,7 +522,7 @@ onMounted(loadOptions);
 
       <div class="form-actions">
         <button class="secondary-action" type="button" :disabled="saving || finished" @click="emit('back')">Voltar</button>
-        <button v-if="form.origem_paciente === 'manual'" class="primary-action" type="submit" :disabled="saving || loadingOptions || finished">
+        <button class="primary-action" type="submit" :disabled="saving || loadingOptions || finished">
           {{ saving ? 'Salvando...' : 'Salvar' }}
         </button>
       </div>

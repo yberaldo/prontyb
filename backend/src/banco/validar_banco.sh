@@ -84,15 +84,6 @@ mysql --defaults-extra-file="$TMPFILE" -D "$DB_NAME" -e "SHOW CREATE TABLE fluid
 echo "-- Foreign keys (information_schema.KEY_COLUMN_USAGE)"
 mysql --defaults-extra-file="$TMPFILE" -sN -D "$DB_NAME" -e "SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = '$DB_NAME' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION;"
 
-# verificar colunas novas do prontuario
-for col in origem_paciente microchip data_nascimento petlove_id; do
-  cnt=$(mysql --defaults-extra-file="$TMPFILE" -sN -D "$DB_NAME" -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DB_NAME' AND TABLE_NAME = 'prontuarios_anestesicos' AND COLUMN_NAME = '$col';")
-  if [ "$cnt" -ne 1 ]; then
-    echo "ERRO: coluna $col ausente na tabela prontuarios_anestesicos" >&2
-    exit 1
-  fi
-done
-
 # verificar monitorizacao_extraida_id existe
 cnt_monitorizacao_extraida_id=$(mysql --defaults-extra-file="$TMPFILE" -sN -D "$DB_NAME" -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='monitorizacao_linhas' AND COLUMN_NAME='monitorizacao_extraida_id';")
 if [ "$cnt_monitorizacao_extraida_id" -ne 1 ]; then
