@@ -113,7 +113,9 @@ for (const cenario of [
     const app = buildApp({
       ...servicoReal,
       async buscarPorMicrochip() {
-        const erro = new Error('Cookie=sessao-ficticia; payload=NAO_VAZAR');
+        const erro = new Error(
+          'Authorization=Bearer TESTE_NAO_VAZAR; Cookie=sessao-ficticia; token=TOKEN_NAO_VAZAR; payload=NAO_VAZAR'
+        );
         erro.code = cenario.code;
         throw erro;
       }
@@ -134,7 +136,14 @@ for (const cenario of [
       mensagem: cenario.mensagem
     });
     assert.equal(res.body.includes('sessao-ficticia'), false);
+    assert.equal(res.body.includes('TESTE_NAO_VAZAR'), false);
+    assert.equal(res.body.includes('TOKEN_NAO_VAZAR'), false);
     assert.equal(res.body.includes('NAO_VAZAR'), false);
+    assert.equal(res.body.includes('Authorization'), false);
+    assert.equal(res.body.includes('Cookie'), false);
+    assert.equal(res.body.includes('token'), false);
+    assert.equal(res.body.includes('payload'), false);
+    assert.equal(res.body.includes('petlove_id'), false);
   });
 }
 

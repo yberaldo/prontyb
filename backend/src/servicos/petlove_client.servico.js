@@ -17,6 +17,22 @@ function ehAbortError(erro) {
   return Boolean(erro) && (erro.name === 'AbortError' || erro.code === 'ABORT_ERR');
 }
 
+function montarHeadersPetlove(configuracao) {
+  const headers = {
+    Accept: 'application/json'
+  };
+
+  if (configuracao.authorization) {
+    headers.Authorization = configuracao.authorization;
+  }
+
+  if (configuracao.authCookie) {
+    headers.Cookie = configuracao.authCookie;
+  }
+
+  return headers;
+}
+
 function criarClientPetlove({
   configuracao,
   transporte = globalThis.fetch,
@@ -41,10 +57,7 @@ function criarClientPetlove({
         try {
           resposta = await transporte(url, {
             method: 'GET',
-            headers: {
-              Accept: 'application/json',
-              Cookie: configuracao.authCookie
-            },
+            headers: montarHeadersPetlove(configuracao),
             signal: controlador ? controlador.signal : undefined
           });
         } catch (erro) {
@@ -87,5 +100,6 @@ function criarClientPetlove({
 
 module.exports = {
   CODIGOS_ERRO_CLIENT,
-  criarClientPetlove
+  criarClientPetlove,
+  montarHeadersPetlove
 };

@@ -133,6 +133,81 @@ function validarTimeoutMs(valor) {
   return numero;
 }
 
+async function obterCredenciaisParaCli({
+  env = process.env,
+  perguntarOcultoFn = perguntarOculto,
+  fsImpl = require('node:fs'),
+} = {}) {
+  const authorization = String(env.PETLOVE_AUTHORIZATION ?? '').trim();
+  const authorizationFile = String(env.PETLOVE_AUTHORIZATION_FILE ?? '').trim();
+  const authCookie = String(env.PETLOVE_AUTH_COOKIE ?? '').trim();
+
+  if (authorization) {
+    return {
+      authorization,
+      authorizationOrigem: 'env',
+      authCookie: authCookie || null,
+      authCookieOrigem: authCookie ? 'env' : null,
+    };
+  }
+
+  if (authorizationFile) {
+    let authorizationArquivo;
+    try {
+      authorizationArquivo = String(
+        fsImpl.readFileSync(authorizationFile, 'utf8') ?? '',
+      ).trim();
+    } catch (_) {
+      throw criarErroSanitizado(
+        'VALIDACAO_LOCAL',
+        'PETLOVE_AUTHORIZATION_FILE invalido ou ilegivel.',
+        1,
+      );
+    }
+
+    if (!authorizationArquivo) {
+      throw criarErroSanitizado(
+        'VALIDACAO_LOCAL',
+        'PETLOVE_AUTHORIZATION_FILE invalido ou ilegivel.',
+        1,
+      );
+    }
+
+    return {
+      authorization: authorizationArquivo,
+      authorizationOrigem: 'arquivo',
+      authCookie: authCookie || null,
+      authCookieOrigem: authCookie ? 'env' : null,
+    };
+  }
+
+  const authorizationInformado = String(
+    await perguntarOcultoFn('PETLOVE_AUTHORIZATION (entrada oculta, Enter para usar Cookie): '),
+  ).trim();
+  const cookieInformado = authCookie || String(
+    await perguntarOcultoFn(
+      authorizationInformado
+        ? 'PETLOVE_AUTH_COOKIE (entrada oculta, Enter para nao usar): '
+        : 'PETLOVE_AUTH_COOKIE (entrada oculta): ',
+    ),
+  ).trim();
+
+  if (!authorizationInformado && !cookieInformado) {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'PETLOVE_AUTHORIZATION ou PETLOVE_AUTH_COOKIE obrigatorio.',
+      1,
+    );
+  }
+
+  return {
+    authorization: authorizationInformado || null,
+    authorizationOrigem: authorizationInformado ? 'entrada' : null,
+    authCookie: cookieInformado || null,
+    authCookieOrigem: cookieInformado ? (authCookie ? 'env' : 'entrada') : null,
+  };
+}
+
 function perguntar(texto) {
   return new Promise((resolve) => {
     const rl = readline.createInterface({
@@ -429,15 +504,7 @@ async function main() {
     const baseUrl = validarBaseUrlPetlove(
       await perguntar(`PETLOVE_BASE_URL (Enter para ${DEFAULT_PETLOVE_BASE_URL}): `),
     );
-    const cookie = String(await perguntarOculto('PETLOVE_AUTH_COOKIE (entrada oculta): ')).trim();
-
-    if (!cookie) {
-      throw criarErroSanitizado(
-        'VALIDACAO_LOCAL',
-        'PETLOVE_AUTH_COOKIE obrigatorio.',
-        1,
-      );
-    }
+    const credenciais = await obterCredenciaisParaCli();
 
     const microchip = validarMicrochip(await perguntar('Microchip para teste: '));
     const timeoutMs = validarTimeoutMs(
@@ -446,7 +513,12 @@ async function main() {
 
     process.env.PETLOVE_BUSCA_HABILITADA = 'true';
     process.env.PETLOVE_BASE_URL = baseUrl;
-    process.env.PETLOVE_AUTH_COOKIE = cookie;
+    if (credenciais.authorization) {
+      process.env.PETLOVE_AUTHORIZATION = credenciais.authorization;
+    }
+    if (credenciais.authCookie) {
+      process.env.PETLOVE_AUTH_COOKIE = credenciais.authCookie;
+    }
     process.env.PETLOVE_TIMEOUT_MS = String(timeoutMs);
 
     const consulta = carregarServicoConsultaPetlove();
@@ -486,6 +558,8 @@ module.exports = {
   mapearCodigoErro,
   montarResumoErroSanitizado,
   montarResumoSucesso,
+  main,
+  obterCredenciaisParaCli,
   perguntar,
   perguntarOculto,
   validarBaseUrlPetlove,

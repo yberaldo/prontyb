@@ -2,11 +2,15 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('path');
 
 const raizServicos = path.resolve(__dirname, '..', 'src', 'servicos');
 const {
   TIMEOUT_PADRAO_MS,
+  obterAuthorization,
+  obterAuthCookie,
   validarConfiguracaoPetlove
 } = require(path.join(raizServicos, 'petlove_configuracao.servico.js'));
 const {
@@ -67,7 +71,7 @@ test('feature flag ausente ou desligada deixa busca nao configurada', () => {
   );
 });
 
-test('configuracao habilitada exige base HTTPS e cookie', () => {
+test('configuracao habilitada exige base HTTPS e credencial Petlove', () => {
   assert.deepEqual(
     validarConfiguracaoPetlove(entradaConfigurada({ baseUrl: '' })),
     { configurada: false }
@@ -78,6 +82,68 @@ test('configuracao habilitada exige base HTTPS e cookie', () => {
   );
   assert.deepEqual(
     validarConfiguracaoPetlove(entradaConfigurada({ authCookie: '' })),
+    { configurada: false }
+  );
+});
+
+test('PETLOVE_AUTHORIZATION torna configuracao valida sem cookie', () => {
+  const configuracao = validarConfiguracaoPetlove(entradaConfigurada({
+    authCookie: '',
+    authorization: ' Bearer TESTE_AUTORIZACAO_SINTETICA '
+  }));
+
+  assert.equal(configuracao.configurada, true);
+  assert.equal(configuracao.authorization, 'Bearer TESTE_AUTORIZACAO_SINTETICA');
+  assert.equal(configuracao.authCookie, '');
+});
+
+test('configuracao pode ler Authorization de arquivo temporario sintetico', (t) => {
+  const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'prontyb-petlove-'));
+  const arquivo = path.join(diretorio, 'petlove.authorization');
+  fs.writeFileSync(arquivo, ' Bearer TESTE_ARQUIVO_SINTETICO\n', {
+    encoding: 'utf8',
+    mode: 0o600
+  });
+  t.after(() => fs.rmSync(diretorio, { recursive: true, force: true }));
+
+  const configuracao = validarConfiguracaoPetlove(
+    entradaConfigurada({
+      authCookie: '',
+      authorizationFile: arquivo
+    })
+  );
+
+  assert.equal(configuracao.configurada, true);
+  assert.equal(configuracao.authorization, 'Bearer TESTE_ARQUIVO_SINTETICO');
+  assert.equal(configuracao.authCookie, '');
+});
+
+test('Authorization direto tem prioridade sobre arquivo e arquivo ilegivel desabilita sem cookie', () => {
+  let leituras = 0;
+  const fsFake = {
+    readFileSync() {
+      leituras += 1;
+      throw new Error('arquivo indisponivel');
+    }
+  };
+
+  assert.equal(
+    obterAuthorization({
+      authorization: ' Bearer TESTE_DIRETO ',
+      authorizationFile: '/etc/prontyb/petlove.authorization'
+    }, fsFake),
+    'Bearer TESTE_DIRETO'
+  );
+  assert.equal(leituras, 0);
+  assert.equal(obterAuthCookie({ authCookie: ' sessao=ficticia ' }), 'sessao=ficticia');
+  assert.deepEqual(
+    validarConfiguracaoPetlove(
+      entradaConfigurada({
+        authCookie: '',
+        authorizationFile: '/etc/prontyb/petlove.authorization'
+      }),
+      { fs: fsFake }
+    ),
     { configurada: false }
   );
 });
@@ -113,7 +179,46 @@ test('client usa URL codificada e envia cookie somente no transporte backend', a
   assert.equal(chamada.opcoes.method, 'GET');
   assert.equal(chamada.opcoes.headers.Cookie, 'sessao=ficticia');
   assert.equal(chamada.opcoes.headers.Accept, 'application/json');
+  assert.equal(Object.prototype.hasOwnProperty.call(chamada.opcoes.headers, 'Authorization'), false);
   assert.deepEqual(payload, pacienteBruto());
+});
+
+test('client envia Authorization configurado sem duplicar Bearer', async () => {
+  const configuracao = validarConfiguracaoPetlove(entradaConfigurada({
+    authCookie: '',
+    authorization: 'Bearer TESTE_AUTORIZACAO_SINTETICA'
+  }));
+  let chamada;
+  const transporte = async (url, opcoes) => {
+    chamada = { url, opcoes };
+    return resposta(200, pacienteBruto());
+  };
+  const client = criarClientPetlove({ configuracao, transporte });
+
+  await client.buscarPorMicrochip('CHIP-FAKE-001');
+
+  assert.equal(chamada.opcoes.headers.Authorization, 'Bearer TESTE_AUTORIZACAO_SINTETICA');
+  assert.equal(Object.prototype.hasOwnProperty.call(chamada.opcoes.headers, 'Cookie'), false);
+});
+
+test('client envia Authorization e Cookie quando ambos existem', async () => {
+  const configuracao = validarConfiguracaoPetlove(entradaConfigurada({
+    authCookie: 'sessao=ficticia',
+    authorization: 'Bearer TESTE_AUTORIZACAO_SINTETICA'
+  }));
+  let headers;
+  const client = criarClientPetlove({
+    configuracao,
+    transporte: async (url, opcoes) => {
+      headers = opcoes.headers;
+      return resposta(200, pacienteBruto());
+    }
+  });
+
+  await client.buscarPorMicrochip('CHIP-FAKE-001');
+
+  assert.equal(headers.Authorization, 'Bearer TESTE_AUTORIZACAO_SINTETICA');
+  assert.equal(headers.Cookie, 'sessao=ficticia');
 });
 
 test('client converte 401 e 403 em erro controlado', async () => {

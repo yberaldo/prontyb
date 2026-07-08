@@ -43,10 +43,26 @@ GET /api/atendimento/{microchip}
 
 - `PETLOVE_BUSCA_HABILITADA`: habilita somente quando tem valor literal `true`.
 - `PETLOVE_BASE_URL`: URL base HTTPS do upstream.
-- `PETLOVE_AUTH_COOKIE`: cookie ou sessao usado apenas pelo backend.
+- `PETLOVE_AUTHORIZATION`: valor exato do header Authorization observado na homologacao manual. O backend aplica apenas trim nas bordas e nao adiciona prefixo.
+- `PETLOVE_AUTHORIZATION_FILE`: caminho opcional para arquivo restrito contendo somente o valor de Authorization. A leitura e backend-only e aplica trim nas bordas.
+- `PETLOVE_AUTH_COOKIE`: compatibilidade com o fluxo anterior, usado apenas pelo backend quando configurado.
 - `PETLOVE_TIMEOUT_MS`: timeout opcional entre 1000 e 15000 ms; quando ausente, usa o padrao seguro interno.
-- Feature flag desligada, URL invalida, cookie ausente ou timeout invalido mantem a busca como nao configurada.
+- Feature flag desligada, URL invalida, ausencia simultanea de Authorization e Cookie, arquivo de Authorization ilegivel sem Cookie alternativo ou timeout invalido mantem a busca como nao configurada.
 - Nenhum valor de configuracao e registrado em log ou retornado na API.
+
+Antes de preparar um arquivo restrito na VM, deve-se identificar o usuario real
+que executa o servico backend. Nao se deve presumir que esse processo roda como
+`root`. O arquivo deve ficar fora do Git, por exemplo em
+`/etc/prontyb/petlove.authorization`, e pertencer ao usuario real do backend com
+permissao `0600`. Quando o modelo operacional exigir acesso por grupo, deve-se usar
+um grupo dedicado e restrito com permissao `0640`.
+
+Em uma ativacao futura, o processo do backend podera receber
+`PETLOVE_AUTHORIZATION_FILE=/etc/prontyb/petlove.authorization`. A credencial
+tecnica observada na homologacao e Authorization; arquivo de Cookie nao e a
+solucao principal. Esta etapa nao altera systemd nem ativa producao. Nenhum valor
+real deve ser versionado, enviado ao chat ou Codex, colocado em `.env` local,
+incluido na documentacao, impresso em logs ou exposto ao frontend.
 
 ## Homologacao manual via CLI
 
@@ -58,12 +74,15 @@ cd backend
 npm run homologar:petlove
 ```
 
-O operador informa interativamente a URL base HTTPS, o cookie de autenticacao, o
-microchip e, opcionalmente, o timeout entre 1000 e 15000 ms. Em terminal interativo,
-a entrada do cookie fica oculta. A ferramenta valida os dados, configura
-`PETLOVE_BUSCA_HABILITADA`, `PETLOVE_BASE_URL`, `PETLOVE_AUTH_COOKIE` e
-`PETLOVE_TIMEOUT_MS` somente no processo temporario do CLI e carrega o servico de
-consulta apenas depois disso.
+O operador informa interativamente a URL base HTTPS, o microchip e, opcionalmente,
+o timeout entre 1000 e 15000 ms. A credencial tecnica observada no DevTools durante
+a homologacao foi o header Authorization. O CLI usa `PETLOVE_AUTHORIZATION` ou
+`PETLOVE_AUTHORIZATION_FILE` quando configurados. Caso nao existam, pede
+Authorization em entrada oculta e permite deixar esse campo vazio quando houver
+`PETLOVE_AUTH_COOKIE`. O Cookie continua opcional para compatibilidade e tambem e
+lido em entrada oculta. A ferramenta exige pelo menos Authorization ou Cookie,
+configura os valores informados somente no processo temporario e carrega o servico
+de consulta apenas depois disso.
 
 A saida de sucesso e um resumo sanitizado: especie, sexo, indicadores booleanos de
 presenca, microchip mascarado e nomes dos campos normalizados. Nao sao impressos
@@ -73,9 +92,10 @@ nome do animal, nome do tutor ou data de nascimento. Erros exibem somente
 
 Cuidados operacionais obrigatorios:
 
-- Nunca colar o cookie em chat, ticket ou mensagem.
-- Nunca commitar o cookie ou qualquer outra credencial.
-- Nunca colocar o cookie em `.env` local.
+- Nunca colar Authorization, Cookie, token ou sessao em chat, ticket ou mensagem.
+- Nunca commitar credenciais Petlove.
+- Nunca guardar login ou senha da Petlove em script, Git, `.env` local, chat ou documentacao.
+- Se a credencial tecnica precisar ficar persistida futuramente na VM, usar somente ambiente restrito ou arquivo fora do repositorio, pertencente ao usuario real do backend com permissao `0600`, ou a grupo dedicado e restrito com permissao `0640`.
 - Nao ativar nem alterar o servico systemd antes de concluir a homologacao manual.
 - Executar somente em sessao SSH confiavel e encerrar o terminal apos o teste.
 - Interromper diante de CAPTCHA, 2FA, bloqueio ou exigencia de intervencao humana.
@@ -189,18 +209,3 @@ Observacao: em resposta real do backend, o fluxo novo continua sendo definido pe
 - Conectar em MySQL local.
 - Registrar credenciais, cookies, tokens ou dados reais.
 - Tentar contornar CAPTCHA, 2FA, bloqueios ou termos.
-## Homologacao manual via CLI
-
-Quando for necessario validar a integracao Petlove manualmente, use a tela de login humana da Central Petlove no navegador:
-
-`https://central-de-saude.petlove.com.br/#/login`
-
-Para o CLI e para o backend, a base tecnica usada deve ser apenas:
-
-`https://central-de-saude.petlove.com.br`
-
-O fluxo continua backend-only e nao deve ser ativado no systemd por padrao.
-Cookie nunca deve ser colado em chat, commit, arquivo `.env` local, documentacao ou qualquer outro meio persistente.
-Nao salve cookie, token, Authorization, sessao ou microchip em nenhum arquivo.
-
-Enquanto `PETLOVE_BUSCA_HABILITADA=true` nao estiver configurado explicitamente no ambiente do systemd, a rota publica continua respondendo `503` com `PETLOVE_NAO_CONFIGURADA`.
