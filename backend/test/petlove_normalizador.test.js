@@ -6,6 +6,42 @@ const path = require('path');
 
 const { normalizarPacientePetlove, ErroNormalizacaoPetlove } = require(path.resolve(__dirname, '..', 'src', 'servicos', 'petlove_normalizador.servico.js'));
 
+test('normaliza payload embrulhado em buscarPorMicrochip', () => {
+  const paciente = normalizarPacientePetlove({
+    buscarPorMicrochip: basePacientePetlove(),
+  });
+
+  assert.equal(paciente.origem_paciente, 'petlove');
+  assert.equal(paciente.microchip, 'CHIP-FAKE-001');
+  assert.equal(paciente.nome_animal, 'Animal Ficticio');
+  assert.equal(paciente.especie, 'canina');
+  assert.equal(paciente.raca, 'SRD');
+  assert.equal(paciente.sexo, 'femea');
+  assert.equal(paciente.data_nascimento, '2018-05-04');
+  assert.equal(paciente.peso, 2.5);
+  assert.equal(paciente.nome_tutor, 'Tutora Ficticia');
+  assert.equal(Object.prototype.hasOwnProperty.call(paciente, 'petlove_id'), false);
+});
+
+test('buscarPorMicrochip invalido gera erro controlado', () => {
+  for (const payload of [
+    { buscarPorMicrochip: null },
+    { buscarPorMicrochip: [] },
+    { buscarPorMicrochip: 'segredo bruto' },
+  ]) {
+    assert.throws(
+      () => normalizarPacientePetlove(payload),
+      (erro) => {
+        assert.ok(erro instanceof ErroNormalizacaoPetlove);
+        assert.equal(erro.code, 'BAD_REQUEST');
+        assert.equal(erro.message, 'Resposta Petlove invalida');
+        assert.equal(erro.message.includes('segredo bruto'), false);
+        return true;
+      },
+    );
+  }
+});
+
 function basePacientePetlove() {
   return {
     name: '  Animal Ficticio  ',

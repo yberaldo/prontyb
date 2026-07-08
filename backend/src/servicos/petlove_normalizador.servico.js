@@ -159,7 +159,24 @@ function extrairPesoHistorico(historico) {
   return null;
 }
 
+function extrairPayloadPacientePetlove(payload) {
+  if (!ehObjetoValido(payload)) {
+    throw new ErroNormalizacaoPetlove('Resposta Petlove invalida', 'BAD_REQUEST');
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(payload, 'buscarPorMicrochip')) {
+    return payload;
+  }
+
+  if (!ehObjetoValido(payload.buscarPorMicrochip)) {
+    throw new ErroNormalizacaoPetlove('Resposta Petlove invalida', 'BAD_REQUEST');
+  }
+
+  return payload.buscarPorMicrochip;
+}
+
 function normalizarPacientePetlove(bruto) {
+  bruto = extrairPayloadPacientePetlove(bruto);
   if (!ehObjetoValido(bruto)) {
     falhar('Resposta Petlove invalida');
   }
