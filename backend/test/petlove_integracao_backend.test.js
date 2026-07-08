@@ -191,6 +191,83 @@ test('client converte JSON invalido em erro seguro', async () => {
   );
 });
 
+test('client mantem timer ate o body e dispara abort no timeout', async () => {
+  const configuracao = validarConfiguracaoPetlove(entradaConfigurada({ timeoutMs: '1000' }));
+  let abortCalls = 0;
+  let signalCapturado;
+
+  class AbortControllerFake {
+    constructor() {
+      this.signal = {
+        aborted: false,
+        listeners: new Set(),
+        addEventListener: (evento, handler) => {
+          if (evento === 'abort') {
+            this.signal.listeners.add(handler);
+          }
+        },
+        removeEventListener: (evento, handler) => {
+          if (evento === 'abort') {
+            this.signal.listeners.delete(handler);
+          }
+        }
+      };
+    }
+
+    abort() {
+      abortCalls += 1;
+      if (this.signal.aborted) {
+        return;
+      }
+      this.signal.aborted = true;
+      for (const handler of [...this.signal.listeners]) {
+        handler();
+      }
+    }
+  }
+
+  const transporte = async (url, opcoes) => {
+    signalCapturado = opcoes.signal;
+    return {
+      status: 200,
+      async json() {
+        return await new Promise((resolve, reject) => {
+          const onAbort = () => {
+            clearTimeout(fallback);
+            signalCapturado.removeEventListener('abort', onAbort);
+            const erro = new Error('body abortado');
+            erro.name = 'AbortError';
+            reject(erro);
+          };
+
+          const fallback = setTimeout(() => {
+            signalCapturado.removeEventListener('abort', onAbort);
+            reject(new Error('timer foi limpo antes de abortar o body'));
+          }, 1200);
+
+          signalCapturado.addEventListener('abort', onAbort);
+          if (signalCapturado.aborted) {
+            onAbort();
+          }
+        });
+      }
+    };
+  };
+
+  const client = criarClientPetlove({
+    configuracao,
+    transporte,
+    AbortControllerImpl: AbortControllerFake
+  });
+
+  await assertRejeitaComCodigo(
+    client.buscarPorMicrochip('CHIP-FAKE-001'),
+    CODIGOS_ERRO_CLIENT.INDISPONIVEL
+  );
+  assert.equal(abortCalls, 1);
+  assert.equal(signalCapturado.aborted, true);
+});
+
 test('service sem configuracao mantem PETLOVE_NAO_CONFIGURADA', async () => {
   const servico = criarServicoConsulta({
     obterConfiguracao: () => ({ configurada: false })

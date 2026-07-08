@@ -13,6 +13,10 @@ function criarErroClient(code) {
   return erro;
 }
 
+function ehAbortError(erro) {
+  return Boolean(erro) && (erro.name === 'AbortError' || erro.code === 'ABORT_ERR');
+}
+
 function criarClientPetlove({
   configuracao,
   transporte = globalThis.fetch,
@@ -32,45 +36,50 @@ function criarClientPetlove({
         ? setTimeout(() => controlador.abort(), configuracao.timeoutMs)
         : null;
 
-      let resposta;
       try {
-        resposta = await transporte(url, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            Cookie: configuracao.authCookie
-          },
-          signal: controlador ? controlador.signal : undefined
-        });
-      } catch (erro) {
-        if (erro && erro.name === 'AbortError') {
+        let resposta;
+        try {
+          resposta = await transporte(url, {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              Cookie: configuracao.authCookie
+            },
+            signal: controlador ? controlador.signal : undefined
+          });
+        } catch (erro) {
+          if (ehAbortError(erro)) {
+            throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+          }
           throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
         }
-        throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+
+        if (!resposta || typeof resposta.status !== 'number') {
+          throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
+        }
+        if (resposta.status === 401 || resposta.status === 403) {
+          throw criarErroClient(CODIGOS_ERRO_CLIENT.NAO_AUTORIZADA);
+        }
+        if (resposta.status === 404) {
+          throw criarErroClient(CODIGOS_ERRO_CLIENT.NAO_ENCONTRADO);
+        }
+        if (resposta.status === 429 || resposta.status >= 500) {
+          throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+        }
+        if (resposta.status < 200 || resposta.status >= 300 || typeof resposta.json !== 'function') {
+          throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
+        }
+
+        try {
+          return await resposta.json();
+        } catch (erro) {
+          if (ehAbortError(erro)) {
+            throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+          }
+          throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
+        }
       } finally {
         if (timer) clearTimeout(timer);
-      }
-
-      if (!resposta || typeof resposta.status !== 'number') {
-        throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
-      }
-      if (resposta.status === 401 || resposta.status === 403) {
-        throw criarErroClient(CODIGOS_ERRO_CLIENT.NAO_AUTORIZADA);
-      }
-      if (resposta.status === 404) {
-        throw criarErroClient(CODIGOS_ERRO_CLIENT.NAO_ENCONTRADO);
-      }
-      if (resposta.status === 429 || resposta.status >= 500) {
-        throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
-      }
-      if (resposta.status < 200 || resposta.status >= 300 || typeof resposta.json !== 'function') {
-        throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
-      }
-
-      try {
-        return await resposta.json();
-      } catch (_) {
-        throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
       }
     }
   };

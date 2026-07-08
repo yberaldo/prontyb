@@ -18,6 +18,25 @@ function assertCacheNoStore(headers) {
   assert.equal(headers['cache-control'], 'no-store');
 }
 
+test('POST padrao sem configuracao continua 503', async (t) => {
+  const app = buildApp();
+  t.after(() => app.close());
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/petlove/pacientes/buscar-por-microchip',
+    payload: { microchip: 'CHIP-FAKE-001' }
+  });
+
+  assert.equal(res.statusCode, 503);
+  assertCacheNoStore(res.headers);
+  assert.deepEqual(res.json(), {
+    ok: false,
+    codigo: 'PETLOVE_NAO_CONFIGURADA',
+    mensagem: 'Busca Petlove nao configurada'
+  });
+});
+
 test('POST valido retorna 503 sem dados nem petlove_id', async (t) => {
   const app = buildApp({
     ...servicoReal,
