@@ -1,313 +1,474 @@
-'use strict'
+'use strict';
 
 const readline = require('node:readline');
+const { stdin, stdout } = require('node:process');
 
-const TIMEOUT_PADRAO_MS = 5000;
-const TIMEOUT_MINIMO_MS = 1000;
-const TIMEOUT_MAXIMO_MS = 15000;
+const DEFAULT_PETLOVE_BASE_URL = 'https://central-de-saude.petlove.com.br';
+const DEFAULT_PETLOVE_TIMEOUT_MS = 15000;
 
-const EXIT_CODES = Object.freeze({
-  SUCESSO: 0,
-  VALIDACAO: 1,
-  NAO_CONFIGURADA: 2,
-  NAO_AUTORIZADA: 3,
-  NAO_ENCONTRADO: 4,
-  RESPOSTA_INVALIDA: 5,
-  INDISPONIVEL: 6,
-  INESPERADO: 9
-});
-
-const ERROS_SEGUROS = Object.freeze({
-  PETLOVE_NAO_CONFIGURADA: Object.freeze({
-    exitCode: EXIT_CODES.NAO_CONFIGURADA,
-    mensagem: 'Busca Petlove nao configurada'
-  }),
-  PETLOVE_NAO_AUTORIZADA: Object.freeze({
-    exitCode: EXIT_CODES.NAO_AUTORIZADA,
-    mensagem: 'Acesso Petlove nao autorizado'
-  }),
-  PACIENTE_NAO_ENCONTRADO: Object.freeze({
-    exitCode: EXIT_CODES.NAO_ENCONTRADO,
-    mensagem: 'Paciente nao encontrado na Petlove'
-  }),
-  PETLOVE_RESPOSTA_INVALIDA: Object.freeze({
-    exitCode: EXIT_CODES.RESPOSTA_INVALIDA,
-    mensagem: 'Resposta Petlove invalida'
-  }),
-  PETLOVE_INDISPONIVEL: Object.freeze({
-    exitCode: EXIT_CODES.INDISPONIVEL,
-    mensagem: 'Busca Petlove temporariamente indisponivel'
-  })
-});
-
-const CAMPOS_NORMALIZADOS_PERMITIDOS = Object.freeze([
-  'origem_paciente',
-  'microchip',
-  'nome_animal',
-  'especie',
-  'raca',
-  'sexo',
-  'data_nascimento',
-  'idade',
-  'peso',
-  'nome_tutor'
-]);
-
-class ErroValidacaoCli extends Error {
-  constructor(mensagem) {
-    super(mensagem);
-    this.name = 'ErroValidacaoCli';
-    this.code = 'VALIDACAO_LOCAL';
-  }
+function criarErroSanitizado(codigo, mensagem, exitCode) {
+  const erro = new Error(mensagem);
+  erro.codigo = codigo;
+  erro.exitCode = exitCode;
+  return erro;
 }
 
-function validarBaseUrlHttps(valor) {
-  const texto = typeof valor === 'string' ? valor.trim() : '';
+function mascararMicrochip(microchip) {
+  const texto = String(microchip ?? '').trim();
+
   if (!texto) {
-    throw new ErroValidacaoCli('PETLOVE_BASE_URL e obrigatoria');
+    return '';
   }
+
+  if (texto.length <= 4) {
+    return `${texto[0] ?? ''}${texto.length > 1 ? '*'.repeat(Math.max(texto.length - 2, 0)) : ''}${texto.length > 1 ? texto[texto.length - 1] : ''}`;
+  }
+
+  const inicio = texto.slice(0, 3);
+  const fim = texto.slice(-2);
+  return `${inicio}${'*'.repeat(Math.max(texto.length - 5, 3))}${fim}`;
+}
+
+function validarBaseUrlPetlove(valor) {
+  const texto = String(valor ?? '').trim();
+
+  if (!texto) {
+    return DEFAULT_PETLOVE_BASE_URL;
+  }
+
+  let url;
 
   try {
-    const url = new URL(texto);
-    if (
-      url.protocol !== 'https:' ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash
-    ) {
-      throw new Error('URL rejeitada');
-    }
-    return url.toString().replace(/\/+$/, '');
-  } catch (_) {
-    throw new ErroValidacaoCli('PETLOVE_BASE_URL deve ser uma URL HTTPS valida');
+    url = new URL(texto);
+  } catch {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'PETLOVE_BASE_URL invalida: informe uma URL HTTPS sem credenciais, query ou fragmento.',
+      1,
+    );
   }
-}
 
-function validarCookie(valor) {
-  const cookie = typeof valor === 'string' ? valor.trim() : '';
-  if (!cookie) {
-    throw new ErroValidacaoCli('PETLOVE_AUTH_COOKIE e obrigatorio');
+  if (url.protocol !== 'https:') {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'PETLOVE_BASE_URL deve usar HTTPS.',
+      1,
+    );
   }
-  return cookie;
+
+  if (url.username || url.password) {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'PETLOVE_BASE_URL nao pode conter credenciais.',
+      1,
+    );
+  }
+
+  if (url.search) {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'PETLOVE_BASE_URL nao pode conter query.',
+      1,
+    );
+  }
+
+  if (url.hash) {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'PETLOVE_BASE_URL nao pode conter fragmento.',
+      1,
+    );
+  }
+
+  if (url.pathname && url.pathname !== '/') {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'PETLOVE_BASE_URL deve apontar apenas para a raiz da Central Petlove.',
+      1,
+    );
+  }
+
+  return url.origin;
 }
 
 function validarMicrochip(valor) {
-  const microchip = typeof valor === 'string' ? valor.trim() : '';
-  if (!microchip) {
-    throw new ErroValidacaoCli('Microchip e obrigatorio');
-  }
-  if (microchip.length > 40) {
-    throw new ErroValidacaoCli('Microchip deve ter no maximo 40 caracteres');
-  }
-  return microchip;
-}
+  const texto = String(valor ?? '').trim();
 
-function validarTimeout(valor) {
-  const texto = typeof valor === 'string' ? valor.trim() : '';
-  if (!texto) return TIMEOUT_PADRAO_MS;
-
-  const timeoutMs = Number(texto);
-  if (
-    !Number.isInteger(timeoutMs) ||
-    timeoutMs < TIMEOUT_MINIMO_MS ||
-    timeoutMs > TIMEOUT_MAXIMO_MS
-  ) {
-    throw new ErroValidacaoCli(
-      `Timeout deve ser um inteiro entre ${TIMEOUT_MINIMO_MS} e ${TIMEOUT_MAXIMO_MS} ms`
+  if (!texto) {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'Microchip obrigatorio.',
+      1,
     );
   }
-  return timeoutMs;
-}
 
-function mascararMicrochip(valor) {
-  const microchip = typeof valor === 'string' ? valor.trim() : '';
-  if (!microchip) return '';
-  if (microchip.length <= 2) return '*'.repeat(microchip.length);
-  if (microchip.length <= 8) {
-    return `${microchip[0]}${'*'.repeat(microchip.length - 2)}${microchip.at(-1)}`;
-  }
-  return `${microchip.slice(0, 3)}${'*'.repeat(microchip.length - 6)}${microchip.slice(-3)}`;
-}
-
-function valorPresente(valor) {
-  return valor !== null && valor !== undefined && valor !== '';
-}
-
-function criarResumoSanitizado(paciente) {
-  const dados = paciente && typeof paciente === 'object' ? paciente : {};
-  const camposNormalizados = CAMPOS_NORMALIZADOS_PERMITIDOS.filter(
-    campo => Object.prototype.hasOwnProperty.call(dados, campo)
-  );
-
-  return Object.freeze({
-    ok: true,
-    especie: valorPresente(dados.especie) ? dados.especie : null,
-    sexo: valorPresente(dados.sexo) ? dados.sexo : null,
-    peso_presente: valorPresente(dados.peso),
-    nome_animal_presente: valorPresente(dados.nome_animal),
-    tutor_presente: valorPresente(dados.nome_tutor),
-    nascimento_presente: valorPresente(dados.data_nascimento),
-    microchip_mascarado: mascararMicrochip(dados.microchip),
-    campos_normalizados: camposNormalizados
-  });
-}
-
-function escreverLinha(destino, chave, valor) {
-  const texto = Array.isArray(valor)
-    ? valor.join(',')
-    : valor === null
-      ? 'null'
-      : String(valor);
-  destino.write(`${chave}=${texto}\n`);
-}
-
-function imprimirResumo(resumo, destino = process.stdout) {
-  for (const [chave, valor] of Object.entries(resumo)) {
-    escreverLinha(destino, chave, valor);
-  }
-}
-
-function obterErroSeguro(erro) {
-  if (erro instanceof ErroValidacaoCli) {
-    return {
-      exitCode: EXIT_CODES.VALIDACAO,
-      codigo: erro.code,
-      mensagem: erro.message
-    };
+  if (texto.length > 40) {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'Microchip deve ter no maximo 40 caracteres.',
+      1,
+    );
   }
 
-  const conhecido = erro && ERROS_SEGUROS[erro.code];
-  if (conhecido) {
-    return {
-      exitCode: conhecido.exitCode,
-      codigo: erro.code,
-      mensagem: conhecido.mensagem
-    };
+  return texto;
+}
+
+function validarTimeoutMs(valor) {
+  const texto = String(valor ?? '').trim();
+
+  if (!texto) {
+    return DEFAULT_PETLOVE_TIMEOUT_MS;
   }
 
-  return {
-    exitCode: EXIT_CODES.INESPERADO,
-    codigo: 'ERRO_INESPERADO',
-    mensagem: 'Falha inesperada na homologacao Petlove'
-  };
-}
+  const numero = Number.parseInt(texto, 10);
 
-function imprimirErro(erroSeguro, destino = process.stderr) {
-  escreverLinha(destino, 'ok', false);
-  escreverLinha(destino, 'codigo', erroSeguro.codigo);
-  escreverLinha(destino, 'mensagem', erroSeguro.mensagem);
-}
-
-async function perguntarVisivel(pergunta) {
-  const interfaceLeitura = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: Boolean(process.stdin.isTTY && process.stdout.isTTY),
-    historySize: 0
-  });
-
-  try {
-    return await new Promise(resolve => interfaceLeitura.question(pergunta, resolve));
-  } finally {
-    interfaceLeitura.close();
+  if (!Number.isInteger(numero) || numero <= 0) {
+    throw criarErroSanitizado(
+      'VALIDACAO_LOCAL',
+      'Timeout invalido.',
+      1,
+    );
   }
+
+  return numero;
 }
 
-async function perguntarCookieOculto(pergunta) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY || !process.stdin.setRawMode) {
-    process.stdout.write(pergunta);
-    return await new Promise((resolve, reject) => {
-      const interfaceLeitura = readline.createInterface({
-        input: process.stdin,
-        terminal: false,
-        historySize: 0
-      });
-      interfaceLeitura.once('line', linha => {
-        interfaceLeitura.close();
-        resolve(linha);
-      });
-      interfaceLeitura.once('error', reject);
+function perguntar(texto) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: stdin,
+      output: stdout,
     });
+
+    rl.question(texto, (resposta) => {
+      rl.close();
+      resolve(resposta);
+    });
+  });
+}
+
+function perguntarOculto(texto) {
+  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
+    return perguntar(texto);
   }
 
-  process.stdout.write(pergunta);
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
+  return new Promise((resolve, reject) => {
+    let valor = '';
+    let finalizado = false;
 
-  return await new Promise((resolve, reject) => {
-    let segredo = '';
+    const limpar = () => {
+      stdin.off('data', aoReceberDado);
+      stdin.pause();
 
-    const finalizar = (erro) => {
-      process.stdin.off('data', aoReceberDados);
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-      process.stdout.write('\n');
-      if (erro) reject(erro);
-      else resolve(segredo);
+      if (stdin.isTTY) {
+        stdin.setRawMode(false);
+      }
     };
 
-    const aoReceberDados = buffer => {
+    const finalizar = () => {
+      if (finalizado) {
+        return;
+      }
+
+      finalizado = true;
+      limpar();
+      stdout.write('\n');
+      resolve(valor);
+    };
+
+    const abortar = () => {
+      if (finalizado) {
+        return;
+      }
+
+      finalizado = true;
+      limpar();
+      stdout.write('\n');
+      reject(criarErroSanitizado('VALIDACAO_LOCAL', 'Entrada interrompida.', 1));
+    };
+
+    const aoReceberDado = (buffer) => {
       const entrada = buffer.toString('utf8');
+
       for (const caractere of entrada) {
         if (caractere === '\r' || caractere === '\n') {
           finalizar();
           return;
         }
+
         if (caractere === '\u0003' || caractere === '\u0004') {
-          finalizar(new ErroValidacaoCli('Operacao cancelada'));
+          abortar();
           return;
         }
+
         if (caractere === '\u007f' || caractere === '\b') {
-          segredo = segredo.slice(0, -1);
+          valor = valor.slice(0, -1);
           continue;
         }
-        if (caractere >= ' ') segredo += caractere;
+
+        valor += caractere;
       }
     };
 
-    process.stdin.on('data', aoReceberDados);
+    stdout.write(texto);
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.on('data', aoReceberDado);
   });
 }
 
-async function executar() {
-  const baseUrl = validarBaseUrlHttps(await perguntarVisivel('PETLOVE_BASE_URL (HTTPS): '));
-  let authCookie = validarCookie(await perguntarCookieOculto('PETLOVE_AUTH_COOKIE (oculto): '));
-  const microchip = validarMicrochip(await perguntarVisivel('Microchip para teste: '));
-  const timeoutMs = validarTimeout(
-    await perguntarVisivel(`Timeout em ms [${TIMEOUT_PADRAO_MS}]: `)
-  );
+function extrairValor(objeto, chaves) {
+  if (!objeto || typeof objeto !== 'object') {
+    return null;
+  }
 
-  process.env.PETLOVE_BUSCA_HABILITADA = 'true';
-  process.env.PETLOVE_BASE_URL = baseUrl;
-  process.env.PETLOVE_AUTH_COOKIE = authCookie;
-  process.env.PETLOVE_TIMEOUT_MS = String(timeoutMs);
-  authCookie = null;
+  for (const chave of chaves) {
+    const valor = objeto[chave];
 
-  const { buscarPorMicrochip } = require('../src/servicos/petlove_consulta.servico');
-  const paciente = await buscarPorMicrochip(microchip);
-  imprimirResumo(criarResumoSanitizado(paciente));
-  return EXIT_CODES.SUCESSO;
+    if (valor !== undefined && valor !== null && `${valor}`.trim() !== '') {
+      return valor;
+    }
+  }
+
+  return null;
+}
+
+function temValor(objeto, chaves) {
+  return extrairValor(objeto, chaves) !== null;
+}
+
+function listarCamposNormalizados(resultado) {
+  if (!resultado || typeof resultado !== 'object') {
+    return [];
+  }
+
+  const chavesSensiveis = new Set([
+    'petlove_id',
+    'petloveid',
+    'microchip',
+    'chip',
+    'cookie',
+    'authorization',
+    'auth',
+    'token',
+    'senha',
+    'password',
+    'headers',
+    'header',
+    'response',
+    'raw',
+    'bruto',
+    'tutor',
+    'responsavel',
+    'data_nascimento',
+    'datanascimento',
+    'nascimento',
+    'nome_animal',
+    'nomeanimal',
+  ]);
+
+  return Object.keys(resultado)
+    .filter((chave) => !chavesSensiveis.has(String(chave).toLowerCase()))
+    .sort();
+}
+
+function montarResumoSucesso(microchip, resultado) {
+  return {
+    ok: true,
+    especie: extrairValor(resultado, ['especie']),
+    sexo: extrairValor(resultado, ['sexo']),
+    peso_presente: temValor(resultado, ['peso', 'peso_kg', 'pesoKg']),
+    nome_animal_presente: temValor(resultado, ['nome_animal', 'nomeAnimal', 'nome']),
+    tutor_presente: temValor(resultado, ['tutor', 'responsavel']),
+    nascimento_presente: temValor(resultado, ['data_nascimento', 'dataNascimento', 'nascimento']),
+    microchip_mascarado: mascararMicrochip(microchip),
+    campos_normalizados: listarCamposNormalizados(resultado),
+  };
+}
+
+function mapearCodigoErro(erro) {
+  const codigo = String(erro?.codigo ?? erro?.code ?? '').toUpperCase();
+  const status = Number(erro?.statusCode ?? erro?.status ?? erro?.response?.status);
+  const mensagem = String(erro?.message ?? '').toLowerCase();
+
+  if (codigo === 'PETLOVE_NAO_CONFIGURADA' || status === 503 || mensagem.includes('nao configurada')) {
+    return { codigo: 'PETLOVE_NAO_CONFIGURADA', exitCode: 2, mensagem: 'Busca Petlove nao configurada' };
+  }
+
+  if (codigo === 'NAO_AUTORIZADA' || codigo === 'UNAUTHORIZED' || status === 401 || status === 403 || mensagem.includes('autoriz')) {
+    return { codigo: 'PETLOVE_NAO_AUTORIZADA', exitCode: 3, mensagem: 'Petlove nao autorizada' };
+  }
+
+  if (codigo === 'PACIENTE_NAO_ENCONTRADO' || codigo === 'NAO_ENCONTRADO' || status === 404 || mensagem.includes('nao encontrado')) {
+    return { codigo: 'PETLOVE_PACIENTE_NAO_ENCONTRADO', exitCode: 4, mensagem: 'Paciente nao encontrado' };
+  }
+
+  if (codigo === 'RESPOSTA_INVALIDA' || codigo === 'DADOS_INVALIDOS' || mensagem.includes('resposta invalida') || mensagem.includes('dados invalidos')) {
+    return { codigo: 'PETLOVE_RESPOSTA_INVALIDA', exitCode: 5, mensagem: 'Resposta Petlove invalida' };
+  }
+
+  if (
+    codigo === 'TIMEOUT'
+    || codigo === 'ETIMEDOUT'
+    || codigo === 'ECONNABORTED'
+    || status === 408
+    || status === 502
+    || status === 503
+    || status === 504
+    || mensagem.includes('timeout')
+  ) {
+    return { codigo: 'PETLOVE_INDISPONIVEL', exitCode: 6, mensagem: 'Petlove indisponivel ou timeout' };
+  }
+
+  return { codigo: 'PETLOVE_ERRO_INESPERADO', exitCode: 9, mensagem: 'Erro inesperado sanitizado' };
+}
+
+function selecionarFuncaoConsulta(servico) {
+  if (typeof servico === 'function') {
+    return { fn: servico, contexto: null };
+  }
+
+  if (!servico || typeof servico !== 'object') {
+    return null;
+  }
+
+  const nomesPreferidos = [
+    'consultarPacientePetlove',
+    'consultarPacientePorMicrochipPetlove',
+    'buscarPacientePetlove',
+    'buscarPacientePorMicrochipPetlove',
+    'consultarPetlove',
+    'buscarPetlove',
+    'executarConsultaPetlove',
+  ];
+
+  for (const nome of nomesPreferidos) {
+    if (typeof servico[nome] === 'function') {
+      return { fn: servico[nome], contexto: servico };
+    }
+  }
+
+  const entradaFuncional = Object.entries(servico).find(([, valor]) => typeof valor === 'function');
+
+  return entradaFuncional ? { fn: entradaFuncional[1], contexto: servico } : null;
+}
+
+function carregarServicoConsultaPetlove() {
+  const modulo = require('../src/servicos/petlove_consulta.servico');
+  const consulta = selecionarFuncaoConsulta(modulo);
+
+  if (!consulta) {
+    throw criarErroSanitizado(
+      'PETLOVE_ERRO_INESPERADO',
+      'Servico Petlove de consulta nao encontrado.',
+      9,
+    );
+  }
+
+  return consulta;
+}
+
+function inferirModoChamadaConsulta(consulta) {
+  const fonte = Function.prototype.toString.call(consulta);
+
+  if (/\{\s*microchip\s*\}/i.test(fonte) || /\(\s*\{\s*microchip\s*\}/i.test(fonte)) {
+    return 'objeto';
+  }
+
+  return 'string';
+}
+
+async function executarConsultaPetlove(consultaSelecionada, microchip) {
+  const modo = inferirModoChamadaConsulta(consultaSelecionada.fn);
+  const argumento = modo === 'objeto' ? { microchip } : microchip;
+  const retorno = await consultaSelecionada.fn.call(consultaSelecionada.contexto, argumento);
+
+  if (retorno && typeof retorno === 'object' && 'ok' in retorno && 'resultado' in retorno && retorno.ok === false) {
+    throw Object.assign(new Error(retorno.mensagem ?? 'Erro Petlove.'), {
+      codigo: retorno.codigo ?? 'PETLOVE_ERRO_INESPERADO',
+      statusCode: retorno.statusCode,
+    });
+  }
+
+  if (retorno && typeof retorno === 'object' && 'resultado' in retorno) {
+    return retorno.resultado;
+  }
+
+  return retorno;
+}
+
+function imprimirJson(objeto) {
+  stdout.write(`${JSON.stringify(objeto, null, 2)}\n`);
+}
+
+async function main() {
+  try {
+    const baseUrl = validarBaseUrlPetlove(
+      await perguntar(`PETLOVE_BASE_URL (Enter para ${DEFAULT_PETLOVE_BASE_URL}): `),
+    );
+    const cookie = String(await perguntarOculto('PETLOVE_AUTH_COOKIE (entrada oculta): ')).trim();
+
+    if (!cookie) {
+      throw criarErroSanitizado(
+        'VALIDACAO_LOCAL',
+        'PETLOVE_AUTH_COOKIE obrigatorio.',
+        1,
+      );
+    }
+
+    const microchip = validarMicrochip(await perguntar('Microchip para teste: '));
+    const timeoutMs = validarTimeoutMs(
+      await perguntar(`Timeout em ms (Enter para ${DEFAULT_PETLOVE_TIMEOUT_MS}): `),
+    );
+
+    process.env.PETLOVE_BUSCA_HABILITADA = 'true';
+    process.env.PETLOVE_BASE_URL = baseUrl;
+    process.env.PETLOVE_AUTH_COOKIE = cookie;
+    process.env.PETLOVE_TIMEOUT_MS = String(timeoutMs);
+
+    const consulta = carregarServicoConsultaPetlove();
+    const resultado = await executarConsultaPetlove(consulta, microchip);
+    imprimirJson(montarResumoSucesso(microchip, resultado));
+    return 0;
+  } catch (erro) {
+    if (erro && erro.codigo === 'VALIDACAO_LOCAL') {
+      imprimirJson({
+        ok: false,
+        codigo: erro.codigo,
+        mensagem: erro.message,
+      });
+      return erro.exitCode ?? 1;
+    }
+
+    const sanitizado = mapearCodigoErro(erro);
+    imprimirJson({
+      ok: false,
+      codigo: sanitizado.codigo,
+      mensagem: sanitizado.mensagem,
+    });
+    return sanitizado.exitCode;
+  }
 }
 
 if (require.main === module) {
-  executar()
-    .then(exitCode => {
-      process.exitCode = exitCode;
-    })
-    .catch(erro => {
-      const seguro = obterErroSeguro(erro);
-      imprimirErro(seguro);
-      process.exitCode = seguro.exitCode;
-    });
+  main().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
 }
 
 module.exports = {
-  ErroValidacaoCli,
-  criarResumoSanitizado,
+  DEFAULT_PETLOVE_BASE_URL,
+  DEFAULT_PETLOVE_TIMEOUT_MS,
+  carregarServicoConsultaPetlove,
+  executarConsultaPetlove,
+  listarCamposNormalizados,
+  main,
   mascararMicrochip,
-  obterErroSeguro,
-  validarBaseUrlHttps,
+  mapearCodigoErro,
+  montarResumoSucesso,
+  perguntar,
+  perguntarOculto,
+  validarBaseUrlPetlove,
   validarMicrochip,
-  validarTimeout
+  validarTimeoutMs,
 };

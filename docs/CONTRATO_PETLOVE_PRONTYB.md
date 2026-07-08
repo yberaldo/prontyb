@@ -189,3 +189,18 @@ Observacao: em resposta real do backend, o fluxo novo continua sendo definido pe
 - Conectar em MySQL local.
 - Registrar credenciais, cookies, tokens ou dados reais.
 - Tentar contornar CAPTCHA, 2FA, bloqueios ou termos.
+## Homologacao manual via CLI
+
+Quando for necessario validar a integracao Petlove manualmente, use a tela de login humana da Central Petlove no navegador:
+
+`https://central-de-saude.petlove.com.br/#/login`
+
+Para o CLI e para o backend, a base tecnica usada deve ser apenas:
+
+`https://central-de-saude.petlove.com.br`
+
+O fluxo continua backend-only e nao deve ser ativado no systemd por padrao.
+Cookie nunca deve ser colado em chat, commit, arquivo `.env` local, documentacao ou qualquer outro meio persistente.
+Nao salve cookie, token, Authorization, sessao ou microchip em nenhum arquivo.
+
+Enquanto `PETLOVE_BUSCA_HABILITADA=true` nao estiver configurado explicitamente no ambiente do systemd, a rota publica continua respondendo `503` com `PETLOVE_NAO_CONFIGURADA`.

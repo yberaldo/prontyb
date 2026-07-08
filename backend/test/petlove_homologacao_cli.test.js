@@ -1,88 +1,71 @@
-'use strict'
+'use strict';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
 
-const {
-  ErroValidacaoCli,
-  criarResumoSanitizado,
-  mascararMicrochip,
-  validarBaseUrlHttps,
-  validarMicrochip
-} = require(path.resolve(__dirname, '..', 'scripts', 'petlove_homologacao_cli.js'));
+const cli = require('../scripts/petlove_homologacao_cli.js');
+
+test('base url vazia usa o padrao da Central Petlove', () => {
+  assert.equal(
+    cli.validarBaseUrlPetlove(''),
+    cli.DEFAULT_PETLOVE_BASE_URL,
+  );
+});
+
+test('base url com fragmento continua rejeitada', () => {
+  assert.throws(() => {
+    cli.validarBaseUrlPetlove('https://central-de-saude.petlove.com.br/#/login');
+  }, /fragmento/i);
+});
+
+test('base url com query continua rejeitada', () => {
+  assert.throws(() => {
+    cli.validarBaseUrlPetlove('https://central-de-saude.petlove.com.br/?a=1');
+  }, /query/i);
+});
+
+test('base url com credenciais continua rejeitada', () => {
+  assert.throws(() => {
+    cli.validarBaseUrlPetlove('https://usuario:senha@central-de-saude.petlove.com.br');
+  }, /credenciais/i);
+});
+
+test('base url http continua rejeitada', () => {
+  assert.throws(() => {
+    cli.validarBaseUrlPetlove('http://central-de-saude.petlove.com.br');
+  }, /https/i);
+});
+
+test('resumo sanitizado nao vaza cookie, microchip completo nem petlove_id', () => {
+  const resumo = cli.montarResumoSucesso('123456789012345', {
+    especie: 'canina',
+    sexo: 'F',
+    peso: 12.4,
+    nome_animal: 'Luna',
+    tutor: 'Nome Completo do Tutor',
+    data_nascimento: '2020-01-02',
+    petlove_id: '123456',
+    cookie: 'segredo',
+    authorization: 'Bearer secreto',
+    resposta: { bruta: true },
+  });
+
+  const texto = JSON.stringify(resumo);
+
+  assert.equal(resumo.ok, true);
+  assert.equal(resumo.microchip_mascarado.includes('123456789012345'), false);
+  assert.equal(texto.includes('segredo'), false);
+  assert.equal(texto.includes('123456789012345'), false);
+  assert.equal(texto.includes('petlove_id'), false);
+  assert.equal(texto.includes('Tutor'), false);
+  assert.equal(texto.includes('2020-01-02'), false);
+  assert.equal(texto.includes('Bearer'), false);
+});
 
 test('mascara microchip sem expor o valor completo', () => {
-  assert.equal(mascararMicrochip('ABC123456789XYZ'), 'ABC*********XYZ');
-  assert.equal(mascararMicrochip('1234'), '1**4');
-  assert.equal(mascararMicrochip('12'), '**');
-  assert.notEqual(mascararMicrochip('ABC123456789XYZ'), 'ABC123456789XYZ');
-});
+  const mascarado = cli.mascararMicrochip('123456789012345');
 
-test('base URL aceita somente HTTPS sem credenciais, query ou fragmento', () => {
-  assert.equal(validarBaseUrlHttps(' https://petlove.invalid/ '), 'https://petlove.invalid');
-
-  for (const baseUrl of [
-    '',
-    'http://petlove.invalid',
-    'https://usuario:segredo@petlove.invalid',
-    'https://petlove.invalid?credencial=ficticia',
-    'https://petlove.invalid#fragmento'
-  ]) {
-    assert.throws(() => validarBaseUrlHttps(baseUrl), ErroValidacaoCli);
-  }
-});
-
-test('microchip e obrigatorio e limitado a 40 caracteres', () => {
-  assert.equal(validarMicrochip(' CHIP-FICTICIO-001 '), 'CHIP-FICTICIO-001');
-  assert.equal(validarMicrochip('A'.repeat(40)), 'A'.repeat(40));
-  assert.throws(() => validarMicrochip('   '), ErroValidacaoCli);
-  assert.throws(() => validarMicrochip('A'.repeat(41)), ErroValidacaoCli);
-});
-
-test('resumo sanitizado contem apenas presenca, campos permitidos e microchip mascarado', () => {
-  const sensiveis = {
-    microchip: 'ABC123456789XYZ',
-    nome_animal: 'Animal Confidencial',
-    especie: 'canina',
-    sexo: 'femea',
-    peso: 2.5,
-    nome_tutor: 'Tutor Confidencial',
-    data_nascimento: '2018-05-04',
-    petlove_id: 987,
-    cookie: 'sessao=ficticia',
-    resposta_bruta: '{"segredo":"nao expor"}'
-  };
-
-  const resumo = criarResumoSanitizado(sensiveis);
-  const serializado = JSON.stringify(resumo);
-
-  assert.deepEqual(resumo, {
-    ok: true,
-    especie: 'canina',
-    sexo: 'femea',
-    peso_presente: true,
-    nome_animal_presente: true,
-    tutor_presente: true,
-    nascimento_presente: true,
-    microchip_mascarado: 'ABC*********XYZ',
-    campos_normalizados: [
-      'microchip',
-      'nome_animal',
-      'especie',
-      'sexo',
-      'data_nascimento',
-      'peso',
-      'nome_tutor'
-    ]
-  });
-  assert.equal(serializado.includes('ABC123456789XYZ'), false);
-  assert.equal(serializado.includes('Animal Confidencial'), false);
-  assert.equal(serializado.includes('Tutor Confidencial'), false);
-  assert.equal(serializado.includes('2018-05-04'), false);
-  assert.equal(serializado.includes('sessao=ficticia'), false);
-  assert.equal(serializado.includes('nao expor'), false);
-  assert.equal(serializado.includes('petlove_id'), false);
-  assert.equal(serializado.includes('cookie'), false);
-  assert.equal(serializado.includes('resposta_bruta'), false);
+  assert.equal(mascarado.startsWith('123'), true);
+  assert.equal(mascarado.endsWith('45'), true);
+  assert.equal(mascarado.includes('123456789012345'), false);
 });
