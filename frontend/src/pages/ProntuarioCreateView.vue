@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 import { listarClinicas } from '../api/clinicas';
+import { ApiError } from '../api/client';
+import { buscarPetlovePorMicrochip } from '../api/petlove';
 import { listarAnestesistas, listarCirurgioes } from '../api/profissionais';
 import { criarProntuario } from '../api/prontuarios';
 import type { Clinica, CriarProntuarioPayload, OrigemPaciente, Profissional, ProntuarioAnestesico } from '../types/api';
@@ -199,6 +201,7 @@ const anestesistas = ref<Profissional[]>([]);
 const cirurgioes = ref<Profissional[]>([]);
 const loadingOptions = ref(false);
 const saving = ref(false);
+const searchingPetlove = ref(false);
 const finished = ref(false);
 const error = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
@@ -255,8 +258,41 @@ function buildIdade() {
   return valor === 1 ? '1 ano' : `${valor} anos`;
 }
 
-function buscarPetlovePlaceholder() {
-  petloveNotice.value = 'A busca Petlove sera implementada no backend em etapa futura. Por enquanto, este botao nao consulta nenhum servico.';
+function getPetloveErrorMessage(err: unknown) {
+  if (err instanceof ApiError) {
+    if (err.status === 503) return err.message || 'Busca Petlove nao configurada';
+    if (err.status === 400) return err.message || 'Nao foi possivel consultar o microchip informado.';
+    return err.message || 'Nao foi possivel consultar a Petlove.';
+  }
+
+  return 'Nao foi possivel consultar a Petlove. Tente novamente.';
+}
+
+async function buscarPetlove() {
+  if (searchingPetlove.value) return;
+
+  const microchip = textValue(form.microchip);
+  petloveNotice.value = null;
+
+  if (!microchip) {
+    petloveNotice.value = 'Informe um microchip.';
+    return;
+  }
+
+  if (microchip.length > 40) {
+    petloveNotice.value = 'Microchip deve ter no maximo 40 caracteres.';
+    return;
+  }
+
+  searchingPetlove.value = true;
+  try {
+    await buscarPetlovePorMicrochip(microchip);
+    petloveNotice.value = 'Busca Petlove retornou uma resposta inesperada.';
+  } catch (err) {
+    petloveNotice.value = getPetloveErrorMessage(err);
+  } finally {
+    searchingPetlove.value = false;
+  }
 }
 
 function buildPayload(): CriarProntuarioPayload | null {
@@ -331,6 +367,11 @@ function buildPayload(): CriarProntuarioPayload | null {
 
   return payload;
 }
+
+watch(() => form.origem_paciente, () => {
+  petloveNotice.value = null;
+  searchingPetlove.value = false;
+});
 
 async function loadOptions() {
   loadingOptions.value = true;
@@ -432,7 +473,9 @@ onMounted(loadOptions);
             <div class="field field-wide">
               <span>Microchip</span>
               <input v-model="form.microchip" autocomplete="off" required type="text" />
-              <button class="secondary-action" type="button" @click="buscarPetlovePlaceholder">Buscar</button>
+              <button class="secondary-action" type="button" :disabled="searchingPetlove" @click="buscarPetlove">
+                {{ searchingPetlove ? 'Buscando...' : 'Buscar' }}
+              </button>
             </div>
             <p v-if="petloveNotice" class="form-note field-wide">{{ petloveNotice }}</p>
           </template>
