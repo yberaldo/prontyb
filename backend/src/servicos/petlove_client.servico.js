@@ -1,0 +1,82 @@
+'use strict'
+
+const CODIGOS_ERRO_CLIENT = Object.freeze({
+  NAO_AUTORIZADA: 'PETLOVE_NAO_AUTORIZADA',
+  NAO_ENCONTRADO: 'PACIENTE_NAO_ENCONTRADO',
+  INDISPONIVEL: 'PETLOVE_INDISPONIVEL',
+  RESPOSTA_INVALIDA: 'PETLOVE_RESPOSTA_INVALIDA'
+});
+
+function criarErroClient(code) {
+  const erro = new Error('Falha controlada na consulta Petlove');
+  erro.code = code;
+  return erro;
+}
+
+function criarClientPetlove({
+  configuracao,
+  transporte = globalThis.fetch,
+  AbortControllerImpl = globalThis.AbortController
+}) {
+  if (!configuracao || !configuracao.configurada || typeof transporte !== 'function') {
+    throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+  }
+
+  return {
+    async buscarPorMicrochip(microchip) {
+      const url = `${configuracao.baseUrl}/api/atendimento/${encodeURIComponent(microchip)}`;
+      const controlador = typeof AbortControllerImpl === 'function'
+        ? new AbortControllerImpl()
+        : null;
+      const timer = controlador
+        ? setTimeout(() => controlador.abort(), configuracao.timeoutMs)
+        : null;
+
+      let resposta;
+      try {
+        resposta = await transporte(url, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Cookie: configuracao.authCookie
+          },
+          signal: controlador ? controlador.signal : undefined
+        });
+      } catch (erro) {
+        if (erro && erro.name === 'AbortError') {
+          throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+        }
+        throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+
+      if (!resposta || typeof resposta.status !== 'number') {
+        throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
+      }
+      if (resposta.status === 401 || resposta.status === 403) {
+        throw criarErroClient(CODIGOS_ERRO_CLIENT.NAO_AUTORIZADA);
+      }
+      if (resposta.status === 404) {
+        throw criarErroClient(CODIGOS_ERRO_CLIENT.NAO_ENCONTRADO);
+      }
+      if (resposta.status === 429 || resposta.status >= 500) {
+        throw criarErroClient(CODIGOS_ERRO_CLIENT.INDISPONIVEL);
+      }
+      if (resposta.status < 200 || resposta.status >= 300 || typeof resposta.json !== 'function') {
+        throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
+      }
+
+      try {
+        return await resposta.json();
+      } catch (_) {
+        throw criarErroClient(CODIGOS_ERRO_CLIENT.RESPOSTA_INVALIDA);
+      }
+    }
+  };
+}
+
+module.exports = {
+  CODIGOS_ERRO_CLIENT,
+  criarClientPetlove
+};

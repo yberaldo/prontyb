@@ -4,9 +4,9 @@
 
 - O fluxo manual do Prontyb continua funcionando.
 - O modo Petlove no frontend exibe apenas o campo de microchip e o botao Buscar.
-- A busca real ainda nao existe no produto.
-- Nao ha implementacao oficial da integracao Petlove neste repositorio.
-- O que existe hoje e apenas a observacao de um contrato interno de resposta, visto apos login manual e autenticado na Central Petlove.
+- O backend possui um client preparatorio, desabilitado por padrao, para o contrato interno observado.
+- Sem configuracao valida, a rota responde `503 PETLOVE_NAO_CONFIGURADA`.
+- A ativacao depende de configuracao exclusivamente server-side e nao altera o contrato do frontend.
 
 ## Decisao tecnica
 
@@ -37,6 +37,16 @@ GET /api/atendimento/{microchip}
 
 - Essa chamada retorna JSON com dados do pet.
 - Este comportamento deve ser entendido como contrato interno observado, nao como API oficial publica.
+- O microchip aparece na URL somente nessa chamada upstream. No contrato publico Prontyb, ele continua sendo enviado exclusivamente no body de `POST /api/petlove/pacientes/buscar-por-microchip`.
+
+## Configuracao backend
+
+- `PETLOVE_BUSCA_HABILITADA`: habilita somente quando tem valor literal `true`.
+- `PETLOVE_BASE_URL`: URL base HTTPS do upstream.
+- `PETLOVE_AUTH_COOKIE`: cookie ou sessao usado apenas pelo backend.
+- `PETLOVE_TIMEOUT_MS`: timeout opcional entre 1000 e 15000 ms; quando ausente, usa o padrao seguro interno.
+- Feature flag desligada, URL invalida, cookie ausente ou timeout invalido mantem a busca como nao configurada.
+- Nenhum valor de configuracao e registrado em log ou retornado na API.
 
 ## Normalizacao campo a campo
 
@@ -127,22 +137,10 @@ Observacao: em resposta real do backend, o fluxo novo continua sendo definido pe
 - dados de CAPTCHA/2FA
 - historico completo de peso
 
-## Arquivos futuros impactados
-
-Categorias que podem ser afetadas em um ciclo futuro, sem autorizar implementacao nesta fase:
-
-- tela de criacao do prontuario;
-- tipos/contratos de API do frontend;
-- camada backend de consulta Petlove;
-- camada backend de normalizacao;
-- validacao de criacao/edicao do prontuario;
-- persistencia ja existente dos campos Petlove;
-
 ## Fora de escopo
 
-- Implementar a integracao Petlove.
-- Criar endpoint definitivo de producao.
-- Criar client HTTP para Petlove.
+- Configurar ou ativar a integracao em producao.
+- Tratar o endpoint observado como API oficial ou estavel.
 - Alterar frontend.
 - Alterar backend de producao nesta tarefa.
 - Alterar banco de dados.

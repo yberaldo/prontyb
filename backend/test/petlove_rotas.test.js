@@ -5,10 +5,12 @@ const assert = require('node:assert/strict');
 const Fastify = require('fastify');
 const path = require('path');
 
-function buildApp() {
+const servicoReal = require(path.resolve(__dirname, '..', 'src', 'servicos', 'petlove_consulta.servico.js'));
+
+function buildApp(servicoConsulta) {
   const app = Fastify({ logger: false });
   const rotasPath = path.resolve(__dirname, '..', 'src', 'rotas', 'petlove.rotas.js');
-  app.register(require(rotasPath), { prefix: '/api' });
+  app.register(require(rotasPath), { prefix: '/api', servicoConsulta });
   return app;
 }
 
@@ -17,7 +19,14 @@ function assertCacheNoStore(headers) {
 }
 
 test('POST valido retorna 503 sem dados nem petlove_id', async (t) => {
-  const app = buildApp();
+  const app = buildApp({
+    ...servicoReal,
+    async buscarPorMicrochip() {
+      const erro = new Error('Busca Petlove nao configurada');
+      erro.code = servicoReal.ERRO_PETLOVE_NAO_CONFIGURADA.code;
+      throw erro;
+    }
+  });
   t.after(() => app.close());
 
   const res = await app.inject({
@@ -38,6 +47,77 @@ test('POST valido retorna 503 sem dados nem petlove_id', async (t) => {
   assert.equal(Object.prototype.hasOwnProperty.call(body, 'dados'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(body, 'petlove_id'), false);
 });
+
+test('POST configurado retorna paciente normalizado sem petlove_id', async (t) => {
+  const app = buildApp({
+    ...servicoReal,
+    async buscarPorMicrochip(microchip) {
+      assert.equal(microchip, 'CHIP-FAKE-001');
+      return {
+        origem_paciente: 'petlove',
+        microchip,
+        nome_animal: 'Animal Ficticio',
+        especie: 'canina',
+        raca: 'SRD',
+        sexo: 'macho',
+        data_nascimento: '2018-05-04',
+        idade: '8 anos',
+        peso: null,
+        nome_tutor: 'Tutor Ficticio'
+      };
+    }
+  });
+  t.after(() => app.close());
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/petlove/pacientes/buscar-por-microchip',
+    payload: { microchip: ' CHIP-FAKE-001 ' }
+  });
+
+  assert.equal(res.statusCode, 200);
+  assertCacheNoStore(res.headers);
+  const body = res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.dados.microchip, 'CHIP-FAKE-001');
+  assert.equal(Object.prototype.hasOwnProperty.call(body.dados, 'petlove_id'), false);
+  assert.deepEqual(body.meta, { fonte: 'petlove' });
+});
+
+for (const cenario of [
+  { code: 'PETLOVE_NAO_AUTORIZADA', status: 503, mensagem: 'Acesso Petlove nao autorizado' },
+  { code: 'PACIENTE_NAO_ENCONTRADO', status: 404, mensagem: 'Paciente nao encontrado na Petlove' },
+  { code: 'PETLOVE_INDISPONIVEL', status: 503, mensagem: 'Busca Petlove temporariamente indisponivel' },
+  { code: 'PETLOVE_RESPOSTA_INVALIDA', status: 502, mensagem: 'Resposta Petlove invalida' }
+]) {
+  test(`${cenario.code} retorna erro publico seguro`, async (t) => {
+    const app = buildApp({
+      ...servicoReal,
+      async buscarPorMicrochip() {
+        const erro = new Error('Cookie=sessao-ficticia; payload=NAO_VAZAR');
+        erro.code = cenario.code;
+        throw erro;
+      }
+    });
+    t.after(() => app.close());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/petlove/pacientes/buscar-por-microchip',
+      payload: { microchip: 'CHIP-FAKE-001' }
+    });
+
+    assert.equal(res.statusCode, cenario.status);
+    assertCacheNoStore(res.headers);
+    assert.deepEqual(res.json(), {
+      ok: false,
+      codigo: cenario.code,
+      mensagem: cenario.mensagem
+    });
+    assert.equal(res.body.includes('sessao-ficticia'), false);
+    assert.equal(res.body.includes('NAO_VAZAR'), false);
+  });
+}
 
 test('GET com microchip na URL nao existe', async (t) => {
   const app = buildApp();
@@ -138,7 +218,8 @@ test('petlove_id retorna 400', async (t) => {
 
   assert.equal(res.statusCode, 400);
   assertCacheNoStore(res.headers);
-  assert.equal(res.json().mensagem, 'petlove_id nao permitido');
+  assert.equal(res.json().mensagem, 'campo desconhecido no body');
+  assert.equal(res.body.includes('petlove_id'), false);
 });
 
 test('campo desconhecido retorna 400', async (t) => {
