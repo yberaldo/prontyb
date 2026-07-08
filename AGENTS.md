@@ -4,7 +4,7 @@ Projeto: PWA de prontuário anestésico veterinário.
 
 Stack:
 - Frontend: Vue 3 / Vite.
-- Backend: Node.js / Express.
+- Backend: Node.js / Fastify.
 - Banco: MySQL.
 - Repositório: yberaldo/prontyb.
 
@@ -48,8 +48,12 @@ Integração Petlove:
 - Não chamar Petlove real sem pedido explícito.
 - Testes devem usar mocks/stubs quando possível.
 - O fluxo manual existente deve continuar funcionando.
-- Se houver variável PETLOVE_AUTH_COOKIE_FILE, ela deve apontar para arquivo seguro fora do Git.
+- PETLOVE_AUTHORIZATION é a credencial técnica principal para a integração.
+- Se houver persistência futura em arquivo, use apenas PETLOVE_AUTHORIZATION_FILE, fora do Git, com permissão restrita.
+- PETLOVE_AUTH_COOKIE permanece apenas como compatibilidade com fluxo legado.
+- Não recomendar PETLOVE_AUTH_COOKIE_FILE como caminho principal.
 - PETLOVE_AUTHORIZATION deve ser tratado como segredo.
+- Não salvar login/senha em script, Git, .env local, chat, Codex ou documentação.
 - Não imprimir Authorization, cookie ou credenciais em logs.
 
 Resposta final esperada:
