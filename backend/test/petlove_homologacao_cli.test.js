@@ -63,6 +63,63 @@ test('resumo sanitizado nao vaza cookie, microchip completo nem petlove_id', () 
   assert.equal(texto.includes('Bearer'), false);
 });
 
+test('erro controlado PETLOVE_RESPOSTA_INVALIDA vira JSON seguro no CLI', () => {
+  const erro = Object.assign(new Error('Resposta Petlove invalida'), {
+    code: 'PETLOVE_RESPOSTA_INVALIDA',
+    payload: {
+      bruto: true,
+      cookie: 'sessao=ficticia',
+      microchip: '123456789012345',
+    },
+  });
+  const resumo = cli.montarResumoErroSanitizado(erro);
+  const texto = JSON.stringify(resumo);
+
+  assert.deepEqual(resumo, {
+    ok: false,
+    codigo: 'PETLOVE_RESPOSTA_INVALIDA',
+    mensagem: 'Resposta Petlove invalida',
+  });
+  assert.equal(texto.includes('stack'), false);
+  assert.equal(texto.includes('payload'), false);
+  assert.equal(texto.includes('bruto'), false);
+  assert.equal(texto.includes('sessao=ficticia'), false);
+  assert.equal(texto.includes('123456789012345'), false);
+});
+
+test('BAD_REQUEST de normalizacao nao vira erro inesperado nem vaza mensagem sensivel', () => {
+  const erro = Object.assign(
+    new Error('Resposta Petlove invalida com cookie=abc e microchip=123456789012345'),
+    { code: 'BAD_REQUEST' },
+  );
+  const resumo = cli.montarResumoErroSanitizado(erro);
+  const texto = JSON.stringify(resumo);
+
+  assert.equal(resumo.ok, false);
+  assert.equal(resumo.codigo, 'PETLOVE_RESPOSTA_INVALIDA');
+  assert.equal(resumo.mensagem, 'Resposta Petlove invalida');
+  assert.equal(texto.includes('PETLOVE_ERRO_INESPERADO'), false);
+  assert.equal(texto.includes('cookie=abc'), false);
+  assert.equal(texto.includes('123456789012345'), false);
+});
+
+test('erro inesperado real continua opaco e sanitizado', () => {
+  const resumo = cli.montarResumoErroSanitizado(
+    new Error('segredo bruto com cookie=abc e microchip=123456789012345'),
+  );
+  const texto = JSON.stringify(resumo);
+
+  assert.deepEqual(resumo, {
+    ok: false,
+    codigo: 'PETLOVE_ERRO_INESPERADO',
+    mensagem: 'Erro inesperado sanitizado',
+  });
+  assert.equal(texto.includes('stack'), false);
+  assert.equal(texto.includes('segredo bruto'), false);
+  assert.equal(texto.includes('cookie=abc'), false);
+  assert.equal(texto.includes('123456789012345'), false);
+});
+
 test('CLI resume paciente normalizado a partir de resposta upstream embrulhada', async () => {
   const payloadUpstream = {
     buscarPorMicrochip: {

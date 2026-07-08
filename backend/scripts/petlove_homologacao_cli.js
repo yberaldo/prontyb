@@ -297,7 +297,7 @@ function mapearCodigoErro(erro) {
     return { codigo: 'PETLOVE_NAO_CONFIGURADA', exitCode: 2, mensagem: 'Busca Petlove nao configurada' };
   }
 
-  if (codigo === 'NAO_AUTORIZADA' || codigo === 'UNAUTHORIZED' || status === 401 || status === 403 || mensagem.includes('autoriz')) {
+  if (codigo === 'PETLOVE_NAO_AUTORIZADA' || codigo === 'NAO_AUTORIZADA' || codigo === 'UNAUTHORIZED' || status === 401 || status === 403 || mensagem.includes('autoriz')) {
     return { codigo: 'PETLOVE_NAO_AUTORIZADA', exitCode: 3, mensagem: 'Petlove nao autorizada' };
   }
 
@@ -305,11 +305,22 @@ function mapearCodigoErro(erro) {
     return { codigo: 'PETLOVE_PACIENTE_NAO_ENCONTRADO', exitCode: 4, mensagem: 'Paciente nao encontrado' };
   }
 
-  if (codigo === 'RESPOSTA_INVALIDA' || codigo === 'DADOS_INVALIDOS' || mensagem.includes('resposta invalida') || mensagem.includes('dados invalidos')) {
+  if (
+    codigo === 'PETLOVE_RESPOSTA_INVALIDA'
+    || codigo === 'RESPOSTA_INVALIDA'
+    || codigo === 'DADOS_INVALIDOS'
+    || codigo === 'BAD_REQUEST'
+    || erro?.name === 'ErroNormalizacaoPetlove'
+    || mensagem.includes('resposta invalida')
+    || mensagem.includes('dados invalidos')
+  ) {
     return { codigo: 'PETLOVE_RESPOSTA_INVALIDA', exitCode: 5, mensagem: 'Resposta Petlove invalida' };
   }
 
   if (
+    codigo === 'PETLOVE_INDISPONIVEL'
+    || codigo === 'INDISPONIVEL'
+    ||
     codigo === 'TIMEOUT'
     || codigo === 'ETIMEDOUT'
     || codigo === 'ECONNABORTED'
@@ -323,6 +334,16 @@ function mapearCodigoErro(erro) {
   }
 
   return { codigo: 'PETLOVE_ERRO_INESPERADO', exitCode: 9, mensagem: 'Erro inesperado sanitizado' };
+}
+
+function montarResumoErroSanitizado(erro) {
+  const sanitizado = mapearCodigoErro(erro);
+
+  return {
+    ok: false,
+    codigo: sanitizado.codigo,
+    mensagem: sanitizado.mensagem,
+  };
 }
 
 function selecionarFuncaoConsulta(servico) {
@@ -443,11 +464,7 @@ async function main() {
     }
 
     const sanitizado = mapearCodigoErro(erro);
-    imprimirJson({
-      ok: false,
-      codigo: sanitizado.codigo,
-      mensagem: sanitizado.mensagem,
-    });
+    imprimirJson(montarResumoErroSanitizado(erro));
     return sanitizado.exitCode;
   }
 }
@@ -467,6 +484,7 @@ module.exports = {
   main,
   mascararMicrochip,
   mapearCodigoErro,
+  montarResumoErroSanitizado,
   montarResumoSucesso,
   perguntar,
   perguntarOculto,
