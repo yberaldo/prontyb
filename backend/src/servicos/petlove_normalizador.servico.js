@@ -197,7 +197,7 @@ function normalizarPacientePetlove(bruto) {
 
   const microchip = trimSeguro(bruto.microchip);
   if (!microchip) {
-    falhar('Microchip nao encontrado na resposta Petlove');
+    falhar('Microchip nao encontrado na Petlove');
   }
 
   const especie = normalizarEspecie(bruto.race);
