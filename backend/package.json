@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon src/servidor.js",
     "start": "node src/servidor.js",
-    "test:petlove": "node test/petlove_normalizador.test.js && node test/petlove_integracao_backend.test.js && node test/petlove_rotas.test.js"
+    "homologar:petlove": "node scripts/petlove_homologacao_cli.js",
+    "test:petlove": "node test/petlove_normalizador.test.js && node test/petlove_integracao_backend.test.js && node test/petlove_rotas.test.js && node test/petlove_homologacao_cli.test.js"
   },
   "dependencies": {
     "@fastify/cors": "^8.0.0",

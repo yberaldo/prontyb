@@ -48,6 +48,43 @@ GET /api/atendimento/{microchip}
 - Feature flag desligada, URL invalida, cookie ausente ou timeout invalido mantem a busca como nao configurada.
 - Nenhum valor de configuracao e registrado em log ou retornado na API.
 
+## Homologacao manual via CLI
+
+O backend possui uma ferramenta isolada para consultar o upstream real manualmente por
+SSH, sem iniciar o servidor HTTP, acessar banco ou usar a rota publica:
+
+```sh
+cd backend
+npm run homologar:petlove
+```
+
+O operador informa interativamente a URL base HTTPS, o cookie de autenticacao, o
+microchip e, opcionalmente, o timeout entre 1000 e 15000 ms. Em terminal interativo,
+a entrada do cookie fica oculta. A ferramenta valida os dados, configura
+`PETLOVE_BUSCA_HABILITADA`, `PETLOVE_BASE_URL`, `PETLOVE_AUTH_COOKIE` e
+`PETLOVE_TIMEOUT_MS` somente no processo temporario do CLI e carrega o servico de
+consulta apenas depois disso.
+
+A saida de sucesso e um resumo sanitizado: especie, sexo, indicadores booleanos de
+presenca, microchip mascarado e nomes dos campos normalizados. Nao sao impressos
+cookie, URL upstream completa, resposta bruta, `petlove_id`, microchip completo,
+nome do animal, nome do tutor ou data de nascimento. Erros exibem somente
+`ok=false`, codigo e mensagem sanitizada, sem stack trace.
+
+Cuidados operacionais obrigatorios:
+
+- Nunca colar o cookie em chat, ticket ou mensagem.
+- Nunca commitar o cookie ou qualquer outra credencial.
+- Nunca colocar o cookie em `.env` local.
+- Nao ativar nem alterar o servico systemd antes de concluir a homologacao manual.
+- Executar somente em sessao SSH confiavel e encerrar o terminal apos o teste.
+- Interromper diante de CAPTCHA, 2FA, bloqueio ou exigencia de intervencao humana.
+
+A ferramenta nao configura producao. A rota publica
+`POST /api/petlove/pacientes/buscar-por-microchip` continua respondendo
+`503 PETLOVE_NAO_CONFIGURADA` enquanto o ambiente do systemd nao tiver configuracao
+valida, incluindo `PETLOVE_BUSCA_HABILITADA=true`.
+
 ## Normalizacao campo a campo
 
 ### Mapeamento principal
