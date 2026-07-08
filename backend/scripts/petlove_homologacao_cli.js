@@ -260,6 +260,8 @@ function listarCamposNormalizados(resultado) {
     'bruto',
     'tutor',
     'responsavel',
+    'nome_tutor',
+    'nometutor',
     'data_nascimento',
     'datanascimento',
     'nascimento',
@@ -279,7 +281,7 @@ function montarResumoSucesso(microchip, resultado) {
     sexo: extrairValor(resultado, ['sexo']),
     peso_presente: temValor(resultado, ['peso', 'peso_kg', 'pesoKg']),
     nome_animal_presente: temValor(resultado, ['nome_animal', 'nomeAnimal', 'nome']),
-    tutor_presente: temValor(resultado, ['tutor', 'responsavel']),
+    tutor_presente: temValor(resultado, ['tutor', 'responsavel', 'nome_tutor', 'nomeTutor']),
     nascimento_presente: temValor(resultado, ['data_nascimento', 'dataNascimento', 'nascimento']),
     microchip_mascarado: mascararMicrochip(microchip),
     campos_normalizados: listarCamposNormalizados(resultado),
@@ -337,6 +339,7 @@ function selecionarFuncaoConsulta(servico) {
     'consultarPacientePorMicrochipPetlove',
     'buscarPacientePetlove',
     'buscarPacientePorMicrochipPetlove',
+    'buscarPorMicrochip',
     'consultarPetlove',
     'buscarPetlove',
     'executarConsultaPetlove',
@@ -353,8 +356,7 @@ function selecionarFuncaoConsulta(servico) {
   return entradaFuncional ? { fn: entradaFuncional[1], contexto: servico } : null;
 }
 
-function carregarServicoConsultaPetlove() {
-  const modulo = require('../src/servicos/petlove_consulta.servico');
+function carregarServicoConsultaPetlove(modulo = require('../src/servicos/petlove_consulta.servico')) {
   const consulta = selecionarFuncaoConsulta(modulo);
 
   if (!consulta) {
@@ -371,7 +373,7 @@ function carregarServicoConsultaPetlove() {
 function inferirModoChamadaConsulta(consulta) {
   const fonte = Function.prototype.toString.call(consulta);
 
-  if (/\{\s*microchip\s*\}/i.test(fonte) || /\(\s*\{\s*microchip\s*\}/i.test(fonte)) {
+  if (/\(\s*\{\s*microchip\s*\}/i.test(fonte)) {
     return 'objeto';
   }
 
