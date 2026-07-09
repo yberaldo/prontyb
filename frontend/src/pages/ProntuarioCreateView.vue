@@ -231,6 +231,11 @@ const MPA_CONFIG = {
   },
 };
 
+const UNIDADES_MPA_OUTRA_DOSE = [
+  { value: 'mg/kg', label: 'mg/kg' },
+  { value: 'mcg/kg', label: 'mcg/kg' },
+] as const;
+
 interface MedicacaoMPABlockForm {
   farmaco_id: string;
   dose_id: string;
@@ -339,6 +344,10 @@ function parseOptionalNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function isMedicacaoDoseOutraSelecionada(doseId: string) {
+  return doseId === 'outra';
+}
+
 function parseQuantidade(value: unknown) {
   const text = textValue(value);
   if (!text || text === 'livre') return null;
@@ -400,6 +409,16 @@ async function handleMedicacaoFarmacoChange(chave: keyof typeof MPA_CONFIG) {
   }
 }
 
+function handleMedicacaoDoseChange(chave: keyof typeof MPA_CONFIG) {
+  medicacaoError.value = null;
+  const form = getMedicacaoBlockForm(chave);
+
+  if (!isMedicacaoDoseOutraSelecionada(form.dose_id)) {
+    form.dose_livre = '';
+    form.unidade_livre = '';
+  }
+}
+
 function getDoseSelecionadaLabel(dose?: DoseFarmaco | null) {
   if (!dose) return '';
   const valor = typeof dose.valor === 'number' ? String(dose.valor) : String(dose.valor);
@@ -421,32 +440,38 @@ function buildMedicacaoPayload(chave: keyof typeof MPA_CONFIG): MedicacaoProntua
   };
 
   const doses = getDosesDoFarmaco(farmacoId);
-  const doseId = optionalId(form.dose_id);
+  const doseId = textValue(form.dose_id);
 
-  if (doseId !== null) {
-    const dose = doses.find((item) => item.id === doseId);
-    if (!dose) {
-      throw new Error(`Dose pre-definida invalida para ${config.titulo}.`);
-    }
-
-    payload.dose_selecionada = dose.rotulo;
-    payload.unidade = dose.unidade;
-    return payload;
-  }
-
-  const doseLivre = parseOptionalNumber(form.dose_livre);
-  if (form.dose_livre.trim() !== '') {
+  if (isMedicacaoDoseOutraSelecionada(doseId)) {
+    const doseLivre = parseOptionalNumber(form.dose_livre);
     if (doseLivre === null || doseLivre <= 0) {
       throw new Error(`Dose livre invalida para ${config.titulo}.`);
     }
 
     const unidadeLivre = textValue(form.unidade_livre);
-    if (!unidadeLivre) {
-      throw new Error(`Unidade obrigatoria para dose livre em ${config.titulo}.`);
+    const unidadeValida = UNIDADES_MPA_OUTRA_DOSE.some((item) => item.value === unidadeLivre);
+    if (!unidadeValida) {
+      throw new Error(`Unidade invalida para dose livre em ${config.titulo}.`);
     }
 
+    payload.dose_selecionada = null;
     payload.dose_digitada = doseLivre;
     payload.unidade = unidadeLivre;
+    return payload;
+  }
+
+  const doseIdNumerico = optionalId(doseId);
+
+  if (doseIdNumerico !== null) {
+    const dose = doses.find((item) => item.id === doseIdNumerico);
+    if (!dose) {
+      throw new Error(`Dose pre-definida invalida para ${config.titulo}.`);
+    }
+
+    payload.dose_selecionada = dose.rotulo;
+    payload.dose_digitada = null;
+    payload.unidade = dose.unidade;
+    return payload;
   }
 
   return payload;
@@ -987,6 +1012,7 @@ onMounted(() => {
                 <select
                   v-model="medicacaoMpaForm.sedativo.dose_id"
                   :disabled="loadingMedicacaoOptions || !medicacaoMpaForm.sedativo.farmaco_id"
+                  @change="handleMedicacaoDoseChange('sedativo')"
                 >
                   <option value="">Nao informar</option>
                   <option
@@ -996,6 +1022,7 @@ onMounted(() => {
                   >
                     {{ getDoseSelecionadaLabel(dose) }}
                   </option>
+                  <option value="outra">Outra dose</option>
                 </select>
                 <small v-if="medicacaoMpaForm.sedativo.farmaco_id && !getDosesDoFarmaco(optionalId(medicacaoMpaForm.sedativo.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.sedativo.farmaco_id) || 0]">
                   Sem doses pre-definidas para este farmaco.
@@ -1003,30 +1030,38 @@ onMounted(() => {
                 <small v-else-if="dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.sedativo.farmaco_id) || 0]">
                   Carregando doses...
                 </small>
+                <small v-if="medicacaoMpaForm.sedativo.dose_id === 'outra'">
+                  Informe a dose e selecione mg/kg ou mcg/kg.
+                </small>
               </label>
 
-              <label class="field">
-                <span>Dose livre</span>
-                <input
-                  v-model="medicacaoMpaForm.sedativo.dose_livre"
-                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.sedativo.dose_id"
-                  autocomplete="off"
-                  inputmode="decimal"
-                  min="0"
-                  step="0.001"
-                  type="number"
-                />
-              </label>
+              <template v-if="medicacaoMpaForm.sedativo.dose_id === 'outra'">
+                <label class="field">
+                  <span>Dose digitada</span>
+                  <input
+                    v-model="medicacaoMpaForm.sedativo.dose_livre"
+                    :disabled="loadingMedicacaoOptions"
+                    autocomplete="off"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.001"
+                    type="number"
+                  />
+                </label>
 
-              <label class="field">
-                <span>Unidade</span>
-                <input
-                  v-model="medicacaoMpaForm.sedativo.unidade_livre"
-                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.sedativo.dose_id"
-                  autocomplete="off"
-                  type="text"
-                />
-              </label>
+                <label class="field">
+                  <span>Unidade</span>
+                  <select
+                    v-model="medicacaoMpaForm.sedativo.unidade_livre"
+                    :disabled="loadingMedicacaoOptions"
+                  >
+                    <option value="">Selecione</option>
+                    <option v-for="item in UNIDADES_MPA_OUTRA_DOSE" :key="item.value" :value="item.value">
+                      {{ item.label }}
+                    </option>
+                  </select>
+                </label>
+              </template>
             </div>
           </article>
 
@@ -1053,6 +1088,7 @@ onMounted(() => {
                 <select
                   v-model="medicacaoMpaForm.opioide.dose_id"
                   :disabled="loadingMedicacaoOptions || !medicacaoMpaForm.opioide.farmaco_id"
+                  @change="handleMedicacaoDoseChange('opioide')"
                 >
                   <option value="">Nao informar</option>
                   <option
@@ -1062,6 +1098,7 @@ onMounted(() => {
                   >
                     {{ getDoseSelecionadaLabel(dose) }}
                   </option>
+                  <option value="outra">Outra dose</option>
                 </select>
                 <small v-if="medicacaoMpaForm.opioide.farmaco_id && !getDosesDoFarmaco(optionalId(medicacaoMpaForm.opioide.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.opioide.farmaco_id) || 0]">
                   Sem doses pre-definidas para este farmaco.
@@ -1069,30 +1106,38 @@ onMounted(() => {
                 <small v-else-if="dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.opioide.farmaco_id) || 0]">
                   Carregando doses...
                 </small>
+                <small v-if="medicacaoMpaForm.opioide.dose_id === 'outra'">
+                  Informe a dose e selecione mg/kg ou mcg/kg.
+                </small>
               </label>
 
-              <label class="field">
-                <span>Dose livre</span>
-                <input
-                  v-model="medicacaoMpaForm.opioide.dose_livre"
-                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.opioide.dose_id"
-                  autocomplete="off"
-                  inputmode="decimal"
-                  min="0"
-                  step="0.001"
-                  type="number"
-                />
-              </label>
+              <template v-if="medicacaoMpaForm.opioide.dose_id === 'outra'">
+                <label class="field">
+                  <span>Dose digitada</span>
+                  <input
+                    v-model="medicacaoMpaForm.opioide.dose_livre"
+                    :disabled="loadingMedicacaoOptions"
+                    autocomplete="off"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.001"
+                    type="number"
+                  />
+                </label>
 
-              <label class="field">
-                <span>Unidade</span>
-                <input
-                  v-model="medicacaoMpaForm.opioide.unidade_livre"
-                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.opioide.dose_id"
-                  autocomplete="off"
-                  type="text"
-                />
-              </label>
+                <label class="field">
+                  <span>Unidade</span>
+                  <select
+                    v-model="medicacaoMpaForm.opioide.unidade_livre"
+                    :disabled="loadingMedicacaoOptions"
+                  >
+                    <option value="">Selecione</option>
+                    <option v-for="item in UNIDADES_MPA_OUTRA_DOSE" :key="item.value" :value="item.value">
+                      {{ item.label }}
+                    </option>
+                  </select>
+                </label>
+              </template>
             </div>
           </article>
         </div>
