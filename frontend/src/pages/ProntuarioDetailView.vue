@@ -49,12 +49,12 @@ const DESAFIO_QUANTIDADE_OPCOES: Array<{ value: string; label: string }> = [
 ];
 
 const FLUIDOTERAPIA_PADRAO = {
-  fluido: '' as '' | FluidoFluidoterapia,
-  taxa_ml_kg_h: '',
+  fluido: 'ringer_com_lactato' as FluidoFluidoterapia,
+  taxa_ml_kg_h: '10',
   desafio_hidrico_realizado: '0',
-  desafio_volume_ml_kg: '15',
-  desafio_tempo_min: '15',
   desafio_quantidade: '1',
+  desafio_volume_ml_kg: '10',
+  desafio_tempo_min: '15',
   desafio_motivo: 'Hipotensao por hipovolemia',
 };
 
@@ -103,16 +103,16 @@ function syncFluidoterapiaForm(item?: FluidoterapiaProntuario | null) {
     ? ''
     : String(item.taxa_ml_kg_h);
   fluidoterapiaForm.desafio_hidrico_realizado = item.desafio_hidrico_realizado ? '1' : '0';
+  const quantidade = item.desafio_quantidade;
+  fluidoterapiaForm.desafio_quantidade = quantidade === null || typeof quantidade === 'undefined' || Number(quantidade) === 0
+    ? FLUIDOTERAPIA_PADRAO.desafio_quantidade
+    : String(quantidade);
   fluidoterapiaForm.desafio_volume_ml_kg = item.desafio_volume_ml_kg === null || typeof item.desafio_volume_ml_kg === 'undefined'
     ? FLUIDOTERAPIA_PADRAO.desafio_volume_ml_kg
     : String(item.desafio_volume_ml_kg);
   fluidoterapiaForm.desafio_tempo_min = item.desafio_tempo_min === null || typeof item.desafio_tempo_min === 'undefined'
     ? FLUIDOTERAPIA_PADRAO.desafio_tempo_min
     : String(item.desafio_tempo_min);
-  const quantidade = item.desafio_quantidade;
-  fluidoterapiaForm.desafio_quantidade = quantidade === null || typeof quantidade === 'undefined' || Number(quantidade) === 0
-    ? 'livre'
-    : String(quantidade);
   fluidoterapiaForm.desafio_motivo = item.desafio_motivo || FLUIDOTERAPIA_PADRAO.desafio_motivo;
 }
 
@@ -175,27 +175,37 @@ function formatQuantidadeDesafio(value?: string | number | null) {
   return `${parsed} vezes`;
 }
 
+function temDesafioHidrico(item?: FluidoterapiaProntuario | null) {
+  return item?.desafio_hidrico_realizado === true || item?.desafio_hidrico_realizado === 1 || item?.desafio_hidrico_realizado === '1';
+}
+
 function buildFluidoterapiaPayload(): FluidoterapiaProntuarioPayload {
   const fluido = textValue(fluidoterapiaForm.fluido) as FluidoFluidoterapia | '';
   if (!fluido) {
     throw new Error('Selecione um fluido principal.');
   }
 
+  const desafioRealizado = fluidoterapiaForm.desafio_hidrico_realizado === '1';
   const payload: FluidoterapiaProntuarioPayload = {
     fluido,
-    desafio_hidrico_realizado: fluidoterapiaForm.desafio_hidrico_realizado === '1',
-    desafio_volume_ml_kg: parseMandatoryPositiveNumber(fluidoterapiaForm.desafio_volume_ml_kg, 'Volume do desafio'),
-    desafio_tempo_min: parseMandatoryPositiveInteger(fluidoterapiaForm.desafio_tempo_min, 'Tempo do desafio'),
-    desafio_quantidade: parseQuantidade(fluidoterapiaForm.desafio_quantidade),
-    desafio_motivo: textValue(fluidoterapiaForm.desafio_motivo) || FLUIDOTERAPIA_PADRAO.desafio_motivo,
+    taxa_ml_kg_h: parseOptionalNumber(fluidoterapiaForm.taxa_ml_kg_h) ?? Number(FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h),
+    desafio_hidrico_realizado: desafioRealizado,
   };
 
-  const taxa = parseOptionalNumber(fluidoterapiaForm.taxa_ml_kg_h);
-  if (taxa !== null) {
-    if (taxa < 0) {
-      throw new Error('Taxa ml/kg/h deve ser maior ou igual a zero.');
+  if (!Number.isFinite(Number(payload.taxa_ml_kg_h)) || Number(payload.taxa_ml_kg_h) < 0) {
+    throw new Error('Taxa ml/kg/h deve ser um numero maior ou igual a zero.');
+  }
+
+  if (desafioRealizado) {
+    const quantidade = parseQuantidade(fluidoterapiaForm.desafio_quantidade);
+    if (typeof quantidade === 'undefined') {
+      throw new Error('Quantidade do desafio deve ser informada.');
     }
-    payload.taxa_ml_kg_h = taxa;
+
+    payload.desafio_volume_ml_kg = 10;
+    payload.desafio_tempo_min = 15;
+    payload.desafio_quantidade = quantidade;
+    payload.desafio_motivo = FLUIDOTERAPIA_PADRAO.desafio_motivo;
   }
 
   return payload;
@@ -359,12 +369,8 @@ onMounted(reloadAll);
 
       <section v-if="prontuario" class="section-block form-section">
         <div class="section-heading">
-          <h2>{{ fluidoterapiaEditId ? 'Atualizar fluidoterapia' : 'Registrar fluidoterapia' }}</h2>
+          <h2>Fluidoterapia</h2>
         </div>
-
-        <p class="form-note">
-          Salve o prontuario e registre aqui a fluidoterapia manual em um bloco separado.
-        </p>
 
         <p v-if="fluidoterapiaSaving" class="state-text">Salvando fluidoterapia...</p>
         <p v-if="fluidoterapias.loading" class="state-text">Carregando fluidoterapia...</p>
@@ -375,7 +381,6 @@ onMounted(reloadAll);
           <label class="field">
             <span>Fluido principal</span>
             <select v-model="fluidoterapiaForm.fluido" required>
-              <option value="">Selecione</option>
               <option v-for="item in FLUIDOS_FLUIDOTERAPIA" :key="item.value" :value="item.value">
                 {{ item.label }}
               </option>
@@ -395,40 +400,18 @@ onMounted(reloadAll);
           </label>
 
           <label class="field">
-            <span>Desafio hidrico realizado</span>
+            <span>Teve desafio hidrico?</span>
             <select v-model="fluidoterapiaForm.desafio_hidrico_realizado">
               <option value="0">Nao</option>
               <option value="1">Sim</option>
             </select>
           </label>
 
-          <div class="mini-card field-wide">
+          <div v-if="fluidoterapiaForm.desafio_hidrico_realizado === '1'" class="mini-card field-wide">
             <strong>Desafio hidrico / prova de carga</strong>
+            <p class="form-note">10 ml/kg em 15 minutos.</p>
+
             <div class="form-grid">
-              <label class="field">
-                <span>Volume ml/kg</span>
-                <input
-                  v-model="fluidoterapiaForm.desafio_volume_ml_kg"
-                  autocomplete="off"
-                  inputmode="decimal"
-                  min="0"
-                  step="0.1"
-                  type="number"
-                />
-              </label>
-
-              <label class="field">
-                <span>Tempo min</span>
-                <input
-                  v-model="fluidoterapiaForm.desafio_tempo_min"
-                  autocomplete="off"
-                  inputmode="numeric"
-                  min="1"
-                  step="1"
-                  type="number"
-                />
-              </label>
-
               <label class="field">
                 <span>Quantidade</span>
                 <select v-model="fluidoterapiaForm.desafio_quantidade">
@@ -438,14 +421,7 @@ onMounted(reloadAll);
                 </select>
               </label>
 
-              <label class="field field-wide">
-                <span>Motivo</span>
-                <input
-                  v-model="fluidoterapiaForm.desafio_motivo"
-                  autocomplete="off"
-                  type="text"
-                />
-              </label>
+              <p class="form-note field-wide">Motivo padrao: Hipotensao por hipovolemia.</p>
             </div>
           </div>
 
@@ -491,11 +467,13 @@ onMounted(reloadAll);
           <strong>{{ formatFluido(item.fluido) }}</strong>
           <dl class="mini-grid">
             <InfoRow label="Taxa ml/kg/h" :value="formatValue(item.taxa_ml_kg_h)" />
-            <InfoRow label="Desafio hidrico realizado" :value="formatBoolean(item.desafio_hidrico_realizado)" />
-            <InfoRow label="Volume ml/kg" :value="formatValue(item.desafio_volume_ml_kg)" />
-            <InfoRow label="Tempo min" :value="formatValue(item.desafio_tempo_min)" />
-            <InfoRow label="Quantidade" :value="formatQuantidadeDesafio(item.desafio_quantidade)" />
-            <InfoRow label="Motivo" :value="formatValue(item.desafio_motivo)" />
+            <template v-if="temDesafioHidrico(item)">
+              <InfoRow label="Desafio hidrico" :value="formatBoolean(item.desafio_hidrico_realizado)" />
+              <InfoRow label="Volume ml/kg" :value="formatValue(item.desafio_volume_ml_kg)" />
+              <InfoRow label="Tempo min" :value="formatValue(item.desafio_tempo_min)" />
+              <InfoRow label="Quantidade" :value="formatQuantidadeDesafio(item.desafio_quantidade)" />
+              <InfoRow label="Motivo" :value="formatValue(item.desafio_motivo)" />
+            </template>
           </dl>
         </article>
       </ReadOnlySection>

@@ -2,8 +2,15 @@
 import { onMounted, reactive, ref } from 'vue';
 import { listarClinicas } from '../api/clinicas';
 import { listarAnestesistas, listarCirurgioes } from '../api/profissionais';
-import { criarProntuario } from '../api/prontuarios';
-import type { Clinica, CriarProntuarioPayload, Profissional, ProntuarioAnestesico } from '../types/api';
+import { criarFluidoterapia, criarProntuario } from '../api/prontuarios';
+import type {
+  Clinica,
+  CriarProntuarioPayload,
+  FluidoterapiaProntuarioPayload,
+  FluidoFluidoterapia,
+  Profissional,
+  ProntuarioAnestesico,
+} from '../types/api';
 
 const RACAS = [
   'Affenpinscher',
@@ -170,6 +177,25 @@ const RACAS = [
   'Biewer Terrier',
 ];
 
+const FLUIDOS_FLUIDOTERAPIA: Array<{ value: FluidoFluidoterapia; label: string }> = [
+  { value: 'ringer_com_lactato', label: 'Ringer com lactato' },
+  { value: 'solucao_fisiologica_09', label: 'Solucao fisiologica 0,9%' },
+];
+
+const DESAFIO_QUANTIDADE_OPCOES: Array<{ value: string; label: string }> = [
+  { value: '1', label: '1 vez' },
+  { value: '2', label: '2 vezes' },
+  { value: '3', label: '3 vezes' },
+  { value: 'livre', label: 'Livre' },
+];
+
+const FLUIDOTERAPIA_PADRAO = {
+  fluido: 'ringer_com_lactato' as FluidoFluidoterapia,
+  taxa_ml_kg_h: '10',
+  desafio_hidrico_realizado: '0',
+  desafio_quantidade: '1',
+};
+
 const emit = defineEmits<{
   back: [];
   created: [prontuario: ProntuarioAnestesico];
@@ -190,6 +216,13 @@ const form = reactive({
   cirurgiao_id: '',
   anestesista_id: '',
   observacoes_pre_anestesicas: '',
+});
+
+const fluidoterapiaForm = reactive({
+  fluido: FLUIDOTERAPIA_PADRAO.fluido,
+  taxa_ml_kg_h: FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h,
+  desafio_hidrico_realizado: FLUIDOTERAPIA_PADRAO.desafio_hidrico_realizado,
+  desafio_quantidade: FLUIDOTERAPIA_PADRAO.desafio_quantidade,
 });
 
 const clinicas = ref<Clinica[]>([]);
@@ -233,6 +266,60 @@ function optionalId(value: unknown) {
   if (!text) return null;
   const id = Number(text);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function parseOptionalNumber(value: unknown) {
+  const text = textValue(value);
+  if (!text) return null;
+  const parsed = Number(text.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseQuantidade(value: unknown) {
+  const text = textValue(value);
+  if (!text || text === 'livre') return null;
+
+  const parsed = Number(text);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    setError('Quantidade do desafio deve ser 1, 2, 3 ou Livre.');
+    return undefined;
+  }
+
+  return parsed;
+}
+
+function buildFluidoterapiaPayload(): FluidoterapiaProntuarioPayload | null {
+  const fluido = textValue(fluidoterapiaForm.fluido) as FluidoFluidoterapia | '';
+  if (!fluido) {
+    setError('Selecione um fluido principal para a fluidoterapia.');
+    return null;
+  }
+
+  const taxa = parseOptionalNumber(fluidoterapiaForm.taxa_ml_kg_h);
+  const taxaFinal = taxa === null ? Number(FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h) : taxa;
+  if (!Number.isFinite(taxaFinal) || taxaFinal < 0) {
+    setError('Taxa ml/kg/h deve ser um numero maior ou igual a zero.');
+    return null;
+  }
+
+  const desafioRealizado = fluidoterapiaForm.desafio_hidrico_realizado === '1';
+  const payload: FluidoterapiaProntuarioPayload = {
+    fluido,
+    taxa_ml_kg_h: taxaFinal,
+    desafio_hidrico_realizado: desafioRealizado,
+  };
+
+  if (desafioRealizado) {
+    const quantidade = parseQuantidade(fluidoterapiaForm.desafio_quantidade);
+    if (typeof quantidade === 'undefined') return null;
+
+    payload.desafio_volume_ml_kg = 10;
+    payload.desafio_tempo_min = 15;
+    payload.desafio_quantidade = quantidade;
+    payload.desafio_motivo = 'Hipotensao por hipovolemia';
+  }
+
+  return payload;
 }
 
 function buildIdade() {
@@ -370,13 +457,27 @@ async function submit() {
 
   if (!payload) return;
 
+  const fluidoterapiaPayload = buildFluidoterapiaPayload();
+  if (!fluidoterapiaPayload) return;
+
   saving.value = true;
   try {
     const criado = await criarProntuario(payload);
-    finished.value = true;
-    successMessage.value = 'Prontuario criado com sucesso.';
-    scrollToFeedback();
-    window.setTimeout(() => emit('created', criado), 350);
+    try {
+      await criarFluidoterapia(criado.id, fluidoterapiaPayload);
+      finished.value = true;
+      successMessage.value = 'Prontuario e fluidoterapia criados com sucesso.';
+      scrollToFeedback();
+      window.setTimeout(() => emit('created', criado), 350);
+    } catch (fluidoterapiaErr) {
+      finished.value = true;
+      successMessage.value = 'Prontuario criado com sucesso.';
+      error.value = `Fluidoterapia nao foi salva: ${getErrorMessage(
+        fluidoterapiaErr,
+        'Nao foi possivel salvar a fluidoterapia.',
+      )}`;
+      scrollToFeedback();
+    }
   } catch (err) {
     setError(getErrorMessage(err, 'Nao foi possivel criar o prontuario.'));
   } finally {
@@ -532,8 +633,63 @@ onMounted(loadOptions);
         </div>
       </section>
 
+      <section class="section-block form-section">
+        <div class="section-heading">
+          <h2>Fluidoterapia</h2>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Fluido principal</span>
+            <select v-model="fluidoterapiaForm.fluido" required>
+              <option v-for="item in FLUIDOS_FLUIDOTERAPIA" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Taxa ml/kg/h</span>
+            <input
+              v-model="fluidoterapiaForm.taxa_ml_kg_h"
+              autocomplete="off"
+              inputmode="decimal"
+              min="0"
+              step="0.1"
+              type="number"
+            />
+          </label>
+
+          <label class="field">
+            <span>Teve desafio hidrico?</span>
+            <select v-model="fluidoterapiaForm.desafio_hidrico_realizado">
+              <option value="0">Nao</option>
+              <option value="1">Sim</option>
+            </select>
+          </label>
+
+          <div v-if="fluidoterapiaForm.desafio_hidrico_realizado === '1'" class="mini-card field-wide">
+            <strong>Desafio hidrico / prova de carga</strong>
+            <p class="form-note">10 ml/kg em 15 minutos.</p>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Quantidade</span>
+                <select v-model="fluidoterapiaForm.desafio_quantidade">
+                  <option v-for="item in DESAFIO_QUANTIDADE_OPCOES" :key="item.value" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </label>
+
+              <p class="form-note field-wide">Motivo padrao: Hipotensao por hipovolemia.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div class="form-actions">
-        <button class="secondary-action" type="button" :disabled="saving || finished" @click="emit('back')">Voltar</button>
+        <button class="secondary-action" type="button" :disabled="saving" @click="emit('back')">Voltar</button>
         <button class="primary-action" type="submit" :disabled="saving || loadingOptions || finished">
           {{ saving ? 'Salvando...' : 'Salvar' }}
         </button>
