@@ -40,6 +40,10 @@ function limparBusca() {
   void loadProntuarios('');
 }
 
+function atualizarProntuarios() {
+  void loadProntuarios();
+}
+
 onMounted(loadProntuarios);
 </script>
 
@@ -54,7 +58,7 @@ onMounted(loadProntuarios);
         <button class="secondary-action" type="button" @click="emit('createProntuario')">
           Novo prontuario
         </button>
-        <button class="primary-action" type="button" :disabled="loading" @click="loadProntuarios">
+        <button class="primary-action" type="button" :disabled="loading" @click="atualizarProntuarios">
           Atualizar
         </button>
       </div>
