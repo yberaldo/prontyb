@@ -5,6 +5,7 @@ import type {
   FluidoterapiaProntuario,
   FluidoterapiaProntuarioPayload,
   MedicacaoProntuario,
+  MedicacaoProntuarioPayload,
   MonitorizacaoProntuario,
   ProntuarioAnestesico,
 } from '../types/api';
@@ -27,6 +28,13 @@ export function criarProntuario(payload: CriarProntuarioPayload) {
 
 export function listarMedicacoes(id: number) {
   return apiGet<MedicacaoProntuario[]>(`${prontuarioPath(id)}/medicacoes`);
+}
+
+export function criarMedicacao(prontuarioId: number, payload: MedicacaoProntuarioPayload) {
+  return apiPost<MedicacaoProntuario, MedicacaoProntuarioPayload>(
+    `${prontuarioPath(prontuarioId)}/medicacoes`,
+    payload,
+  );
 }
 
 export function listarFluidoterapias(id: number) {

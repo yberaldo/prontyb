@@ -37,6 +37,37 @@ export interface ProntuarioAnestesico {
   cirurgiao_uf?: string | null;
 }
 
+export interface CategoriaFarmaco {
+  id: number;
+  nome: string;
+  chave: string;
+  ativo?: boolean | number | null;
+  ordem?: number | null;
+}
+
+export interface Farmaco {
+  id: number;
+  nome: string;
+  unidade_padrao?: string | null;
+  concentracao_padrao?: string | null;
+  permite_dose_livre?: boolean | number | null;
+  ativo?: boolean | number | null;
+  criado_em?: string | null;
+  atualizado_em?: string | null;
+  categorias?: CategoriaFarmaco[];
+}
+
+export interface DoseFarmaco {
+  id: number;
+  farmaco_id: number;
+  rotulo: string;
+  valor: number | string;
+  unidade: string;
+  permite_edicao?: boolean | number | null;
+  ativo?: boolean | number | null;
+  farmaco?: Pick<Farmaco, 'id' | 'nome' | 'unidade_padrao' | 'concentracao_padrao' | 'permite_dose_livre' | 'ativo'> | null;
+}
+
 export interface CriarProntuarioPayload {
   numero_prontuario?: string;
   clinica_id?: number | null;
@@ -52,6 +83,24 @@ export interface CriarProntuarioPayload {
   cirurgiao_id?: number | null;
   anestesista_id: number;
   observacoes_pre_anestesicas?: string | null;
+}
+
+export type MedicacaoProntuarioCategoria =
+  | 'pre_anestesica_sedativo'
+  | 'pre_anestesica_opioide'
+  | 'inducao'
+  | 'manutencao'
+  | 'trans_anestesica';
+
+export interface MedicacaoProntuarioPayload {
+  categoria: MedicacaoProntuarioCategoria;
+  subcategoria: string;
+  farmaco_id: number;
+  dose_selecionada?: string | null;
+  dose_digitada?: number | null;
+  unidade?: string | null;
+  motivo_uso?: string | null;
+  ordem?: number | null;
 }
 
 export type FluidoFluidoterapia = 'ringer_com_lactato' | 'solucao_fisiologica_09';
@@ -99,7 +148,7 @@ export interface Profissional {
 export interface MedicacaoProntuario {
   id: number;
   prontuario_id: number;
-  categoria?: string | null;
+  categoria?: MedicacaoProntuarioCategoria | string | null;
   subcategoria?: string | null;
   farmaco_id?: number | null;
   dose_selecionada?: string | number | null;

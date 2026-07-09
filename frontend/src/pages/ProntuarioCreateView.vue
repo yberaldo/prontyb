@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import { listarClinicas } from '../api/clinicas';
+import { listarDosesPorFarmaco } from '../api/doses_farmacos';
+import { listarFarmacosPorCategoria } from '../api/farmacos';
 import { listarAnestesistas, listarCirurgioes } from '../api/profissionais';
-import { criarFluidoterapia, criarProntuario } from '../api/prontuarios';
+import { criarFluidoterapia, criarMedicacao, criarProntuario } from '../api/prontuarios';
 import type {
   Clinica,
   CriarProntuarioPayload,
   CateterFluidoterapia,
+  DoseFarmaco,
+  Farmaco,
   FluidoterapiaProntuarioPayload,
   FluidoFluidoterapia,
+  MedicacaoProntuarioPayload,
   MembroCanuladoFluidoterapia,
   Profissional,
   ProntuarioAnestesico,
@@ -211,6 +216,37 @@ const FLUIDOTERAPIA_PADRAO = {
   desafio_quantidade: '1',
 };
 
+const MPA_CONFIG = {
+  sedativo: {
+    titulo: 'Tranquilizante / Sedativo',
+    categoria: 'pre_anestesica_sedativo' as const,
+    subcategoria: 'tranquilizantes_sedativos',
+    ordem: 1,
+  },
+  opioide: {
+    titulo: 'Opioide',
+    categoria: 'pre_anestesica_opioide' as const,
+    subcategoria: 'opioides',
+    ordem: 2,
+  },
+};
+
+interface MedicacaoMPABlockForm {
+  farmaco_id: string;
+  dose_id: string;
+  dose_livre: string;
+  unidade_livre: string;
+}
+
+function createMedicacaoBlockForm(): MedicacaoMPABlockForm {
+  return {
+    farmaco_id: '',
+    dose_id: '',
+    dose_livre: '',
+    unidade_livre: '',
+  };
+}
+
 const emit = defineEmits<{
   back: [];
   created: [prontuario: ProntuarioAnestesico];
@@ -242,15 +278,26 @@ const fluidoterapiaForm = reactive({
   desafio_quantidade: FLUIDOTERAPIA_PADRAO.desafio_quantidade,
 });
 
+const medicacaoMpaForm = reactive({
+  sedativo: createMedicacaoBlockForm(),
+  opioide: createMedicacaoBlockForm(),
+});
+
 const clinicas = ref<Clinica[]>([]);
 const anestesistas = ref<Profissional[]>([]);
 const cirurgioes = ref<Profissional[]>([]);
+const farmacosSedativo = ref<Farmaco[]>([]);
+const farmacosOpioide = ref<Farmaco[]>([]);
 const loadingOptions = ref(false);
+const loadingMedicacaoOptions = ref(false);
 const saving = ref(false);
 const finished = ref(false);
 const error = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
+const medicacaoError = ref<string | null>(null);
 const feedbackRef = ref<HTMLElement | null>(null);
+const dosesPorFarmaco = reactive<Record<number, DoseFarmaco[]>>({});
+const dosesLoadingPorFarmaco = reactive<Record<number, boolean>>({});
 
 function getErrorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -305,6 +352,147 @@ function parseQuantidade(value: unknown) {
   return parsed;
 }
 
+function getMedicacaoBlockConfig(chave: keyof typeof MPA_CONFIG) {
+  return MPA_CONFIG[chave];
+}
+
+function getMedicacaoBlockForm(chave: keyof typeof MPA_CONFIG) {
+  return medicacaoMpaForm[chave];
+}
+
+function getMedicacaoFarmacos(chave: keyof typeof MPA_CONFIG) {
+  return chave === 'sedativo' ? farmacosSedativo.value : farmacosOpioide.value;
+}
+
+function getDosesDoFarmaco(farmacoId: number) {
+  return dosesPorFarmaco[farmacoId] || [];
+}
+
+async function ensureDosesForFarmaco(farmacoId: number) {
+  if (!Number.isSafeInteger(farmacoId) || farmacoId <= 0) return;
+  if (Object.prototype.hasOwnProperty.call(dosesPorFarmaco, farmacoId)) return;
+
+  dosesLoadingPorFarmaco[farmacoId] = true;
+  try {
+    dosesPorFarmaco[farmacoId] = await listarDosesPorFarmaco(farmacoId, { ativo: true });
+  } catch (err) {
+    dosesPorFarmaco[farmacoId] = [];
+    throw err;
+  } finally {
+    dosesLoadingPorFarmaco[farmacoId] = false;
+  }
+}
+
+async function handleMedicacaoFarmacoChange(chave: keyof typeof MPA_CONFIG) {
+  medicacaoError.value = null;
+  const form = getMedicacaoBlockForm(chave);
+  form.dose_id = '';
+  form.dose_livre = '';
+  form.unidade_livre = '';
+
+  const farmacoId = optionalId(form.farmaco_id);
+  if (farmacoId === null) return;
+
+  try {
+    await ensureDosesForFarmaco(farmacoId);
+  } catch (err) {
+    medicacaoError.value = getErrorMessage(err, 'Nao foi possivel carregar as doses do farmaco selecionado.');
+  }
+}
+
+function getDoseSelecionadaLabel(dose?: DoseFarmaco | null) {
+  if (!dose) return '';
+  const valor = typeof dose.valor === 'number' ? String(dose.valor) : String(dose.valor);
+  return `${dose.rotulo} - ${valor} ${dose.unidade}`.trim();
+}
+
+function buildMedicacaoPayload(chave: keyof typeof MPA_CONFIG): MedicacaoProntuarioPayload | null {
+  const config = getMedicacaoBlockConfig(chave);
+  const form = getMedicacaoBlockForm(chave);
+  const farmacoId = optionalId(form.farmaco_id);
+
+  if (farmacoId === null) return null;
+
+  const payload: MedicacaoProntuarioPayload = {
+    categoria: config.categoria,
+    subcategoria: config.subcategoria,
+    farmaco_id: farmacoId,
+    ordem: config.ordem,
+  };
+
+  const doses = getDosesDoFarmaco(farmacoId);
+  const doseId = optionalId(form.dose_id);
+
+  if (doseId !== null) {
+    const dose = doses.find((item) => item.id === doseId);
+    if (!dose) {
+      throw new Error(`Dose pre-definida invalida para ${config.titulo}.`);
+    }
+
+    payload.dose_selecionada = dose.rotulo;
+    payload.unidade = dose.unidade;
+    return payload;
+  }
+
+  const doseLivre = parseOptionalNumber(form.dose_livre);
+  if (form.dose_livre.trim() !== '') {
+    if (doseLivre === null || doseLivre <= 0) {
+      throw new Error(`Dose livre invalida para ${config.titulo}.`);
+    }
+
+    const unidadeLivre = textValue(form.unidade_livre);
+    if (!unidadeLivre) {
+      throw new Error(`Unidade obrigatoria para dose livre em ${config.titulo}.`);
+    }
+
+    payload.dose_digitada = doseLivre;
+    payload.unidade = unidadeLivre;
+  }
+
+  return payload;
+}
+
+function prepararMedicacoesPayloads() {
+  const payloads: Array<{ chave: keyof typeof MPA_CONFIG; payload: MedicacaoProntuarioPayload }> = [];
+
+  for (const chave of ['sedativo', 'opioide'] as const) {
+    const payload = buildMedicacaoPayload(chave);
+    if (payload) payloads.push({ chave, payload });
+  }
+
+  return payloads;
+}
+
+async function saveMedicacoes(
+  prontuarioId: number,
+  payloads: Array<{ chave: keyof typeof MPA_CONFIG; payload: MedicacaoProntuarioPayload }>,
+) {
+  if (!payloads.length) return { saved: 0, failed: 0 };
+
+  let saved = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (const item of payloads) {
+    try {
+      await criarMedicacao(prontuarioId, item.payload);
+      saved += 1;
+    } catch (err) {
+      failed += 1;
+      errors.push(`${getMedicacaoBlockConfig(item.chave).titulo}: ${getErrorMessage(err, 'nao foi possivel salvar.')}`);
+    }
+  }
+
+  if (errors.length) {
+    const message = `Falha ao salvar medicacao pre-anestesica: ${errors.join(' | ')}`;
+    medicacaoError.value = message;
+    error.value = message;
+    scrollToFeedback();
+  }
+
+  return { saved, failed };
+}
+
 function buildFluidoterapiaPayload(): FluidoterapiaProntuarioPayload | null {
   const fluido = textValue(fluidoterapiaForm.fluido) as FluidoFluidoterapia | '';
   if (!fluido) {
@@ -343,6 +531,25 @@ function buildFluidoterapiaPayload(): FluidoterapiaProntuarioPayload | null {
   }
 
   return payload;
+}
+
+async function loadMedicacaoOptions() {
+  loadingMedicacaoOptions.value = true;
+  medicacaoError.value = null;
+
+  try {
+    const [sedativo, opioide] = await Promise.all([
+      listarFarmacosPorCategoria(MPA_CONFIG.sedativo.subcategoria),
+      listarFarmacosPorCategoria(MPA_CONFIG.opioide.subcategoria),
+    ]);
+
+    farmacosSedativo.value = sedativo;
+    farmacosOpioide.value = opioide;
+  } catch (err) {
+    medicacaoError.value = getErrorMessage(err, 'Nao foi possivel carregar os catalogos de medicacao.');
+  } finally {
+    loadingMedicacaoOptions.value = false;
+  }
 }
 
 function buildIdade() {
@@ -467,6 +674,7 @@ async function submit() {
 
   error.value = null;
   successMessage.value = null;
+  medicacaoError.value = null;
   finished.value = false;
 
   let payload: CriarProntuarioPayload | null = null;
@@ -483,13 +691,26 @@ async function submit() {
   const fluidoterapiaPayload = buildFluidoterapiaPayload();
   if (!fluidoterapiaPayload) return;
 
+  let medicacoesPayloads: Array<{ chave: keyof typeof MPA_CONFIG; payload: MedicacaoProntuarioPayload }> = [];
+  try {
+    medicacoesPayloads = prepararMedicacoesPayloads();
+  } catch (err) {
+    error.value = getErrorMessage(err, 'Nao foi possivel preparar as medicacoes.');
+    medicacaoError.value = error.value;
+    scrollToFeedback();
+    return;
+  }
+
   saving.value = true;
   try {
     const criado = await criarProntuario(payload);
     try {
       await criarFluidoterapia(criado.id, fluidoterapiaPayload);
+      const resultadoMedicacoes = await saveMedicacoes(criado.id, medicacoesPayloads);
       finished.value = true;
-      successMessage.value = 'Prontuario e fluidoterapia criados com sucesso.';
+      successMessage.value = medicacoesPayloads.length === 0 || resultadoMedicacoes.failed > 0
+        ? 'Prontuario e fluidoterapia criados com sucesso.'
+        : 'Prontuario, fluidoterapia e medicacoes pre-anestesicas criados com sucesso.';
       scrollToFeedback();
       window.setTimeout(() => emit('created', criado), 350);
     } catch (fluidoterapiaErr) {
@@ -513,7 +734,10 @@ function professionalLabel(profissional: Profissional) {
   return crmv ? `${profissional.nome_completo} - CRMV ${crmv}` : profissional.nome_completo;
 }
 
-onMounted(loadOptions);
+onMounted(() => {
+  void loadOptions();
+  void loadMedicacaoOptions();
+});
 </script>
 
 <template>
@@ -728,6 +952,149 @@ onMounted(loadOptions);
               <p class="form-note field-wide">Motivo padrao: Hipotensao por hipovolemia.</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="section-block form-section">
+        <div class="section-heading">
+          <h2>Medicacao pre-anestesica</h2>
+        </div>
+
+        <p v-if="loadingMedicacaoOptions" class="state-text">Carregando catalogos de medicacao...</p>
+        <p v-if="medicacaoError" class="state-text state-error">{{ medicacaoError }}</p>
+
+        <div class="form-grid">
+          <article class="mini-card field-wide">
+            <strong>Tranquilizante / Sedativo</strong>
+            <div class="form-grid">
+              <label class="field">
+                <span>Farmaco</span>
+                <select
+                  v-model="medicacaoMpaForm.sedativo.farmaco_id"
+                  :disabled="loadingMedicacaoOptions || getMedicacaoFarmacos('sedativo').length === 0"
+                  @change="void handleMedicacaoFarmacoChange('sedativo')"
+                >
+                  <option value="">Nao informar</option>
+                  <option v-for="farmaco in getMedicacaoFarmacos('sedativo')" :key="farmaco.id" :value="String(farmaco.id)">
+                    {{ farmaco.nome }}
+                  </option>
+                </select>
+                <small v-if="!loadingMedicacaoOptions && getMedicacaoFarmacos('sedativo').length === 0">Nenhum farmaco ativo nesta categoria.</small>
+              </label>
+
+              <label class="field">
+                <span>Dose pre-definida</span>
+                <select
+                  v-model="medicacaoMpaForm.sedativo.dose_id"
+                  :disabled="loadingMedicacaoOptions || !medicacaoMpaForm.sedativo.farmaco_id"
+                >
+                  <option value="">Nao informar</option>
+                  <option
+                    v-for="dose in getDosesDoFarmaco(optionalId(medicacaoMpaForm.sedativo.farmaco_id) || 0)"
+                    :key="dose.id"
+                    :value="String(dose.id)"
+                  >
+                    {{ getDoseSelecionadaLabel(dose) }}
+                  </option>
+                </select>
+                <small v-if="medicacaoMpaForm.sedativo.farmaco_id && !getDosesDoFarmaco(optionalId(medicacaoMpaForm.sedativo.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.sedativo.farmaco_id) || 0]">
+                  Sem doses pre-definidas para este farmaco.
+                </small>
+                <small v-else-if="dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.sedativo.farmaco_id) || 0]">
+                  Carregando doses...
+                </small>
+              </label>
+
+              <label class="field">
+                <span>Dose livre</span>
+                <input
+                  v-model="medicacaoMpaForm.sedativo.dose_livre"
+                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.sedativo.dose_id"
+                  autocomplete="off"
+                  inputmode="decimal"
+                  min="0"
+                  step="0.001"
+                  type="number"
+                />
+              </label>
+
+              <label class="field">
+                <span>Unidade</span>
+                <input
+                  v-model="medicacaoMpaForm.sedativo.unidade_livre"
+                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.sedativo.dose_id"
+                  autocomplete="off"
+                  type="text"
+                />
+              </label>
+            </div>
+          </article>
+
+          <article class="mini-card field-wide">
+            <strong>Opioide</strong>
+            <div class="form-grid">
+              <label class="field">
+                <span>Farmaco</span>
+                <select
+                  v-model="medicacaoMpaForm.opioide.farmaco_id"
+                  :disabled="loadingMedicacaoOptions || getMedicacaoFarmacos('opioide').length === 0"
+                  @change="void handleMedicacaoFarmacoChange('opioide')"
+                >
+                  <option value="">Nao informar</option>
+                  <option v-for="farmaco in getMedicacaoFarmacos('opioide')" :key="farmaco.id" :value="String(farmaco.id)">
+                    {{ farmaco.nome }}
+                  </option>
+                </select>
+                <small v-if="!loadingMedicacaoOptions && getMedicacaoFarmacos('opioide').length === 0">Nenhum farmaco ativo nesta categoria.</small>
+              </label>
+
+              <label class="field">
+                <span>Dose pre-definida</span>
+                <select
+                  v-model="medicacaoMpaForm.opioide.dose_id"
+                  :disabled="loadingMedicacaoOptions || !medicacaoMpaForm.opioide.farmaco_id"
+                >
+                  <option value="">Nao informar</option>
+                  <option
+                    v-for="dose in getDosesDoFarmaco(optionalId(medicacaoMpaForm.opioide.farmaco_id) || 0)"
+                    :key="dose.id"
+                    :value="String(dose.id)"
+                  >
+                    {{ getDoseSelecionadaLabel(dose) }}
+                  </option>
+                </select>
+                <small v-if="medicacaoMpaForm.opioide.farmaco_id && !getDosesDoFarmaco(optionalId(medicacaoMpaForm.opioide.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.opioide.farmaco_id) || 0]">
+                  Sem doses pre-definidas para este farmaco.
+                </small>
+                <small v-else-if="dosesLoadingPorFarmaco[optionalId(medicacaoMpaForm.opioide.farmaco_id) || 0]">
+                  Carregando doses...
+                </small>
+              </label>
+
+              <label class="field">
+                <span>Dose livre</span>
+                <input
+                  v-model="medicacaoMpaForm.opioide.dose_livre"
+                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.opioide.dose_id"
+                  autocomplete="off"
+                  inputmode="decimal"
+                  min="0"
+                  step="0.001"
+                  type="number"
+                />
+              </label>
+
+              <label class="field">
+                <span>Unidade</span>
+                <input
+                  v-model="medicacaoMpaForm.opioide.unidade_livre"
+                  :disabled="loadingMedicacaoOptions || !!medicacaoMpaForm.opioide.dose_id"
+                  autocomplete="off"
+                  type="text"
+                />
+              </label>
+            </div>
+          </article>
         </div>
       </section>
 
