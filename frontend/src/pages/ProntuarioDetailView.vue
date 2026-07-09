@@ -128,23 +128,6 @@ function parseOptionalNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseMandatoryPositiveNumber(value: unknown, label: string) {
-  const parsed = parseOptionalNumber(value);
-  if (parsed === null || parsed < 0) {
-    throw new Error(`${label} deve ser um numero maior ou igual a zero.`);
-  }
-  return parsed;
-}
-
-function parseMandatoryPositiveInteger(value: unknown, label: string) {
-  const text = textValue(value);
-  const parsed = Number(text);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${label} deve ser um numero inteiro maior que zero.`);
-  }
-  return parsed;
-}
-
 function parseQuantidade(value: unknown) {
   const text = textValue(value);
   if (!text || text === 'livre') return null;
@@ -176,7 +159,8 @@ function formatQuantidadeDesafio(value?: string | number | null) {
 }
 
 function temDesafioHidrico(item?: FluidoterapiaProntuario | null) {
-  return item?.desafio_hidrico_realizado === true || item?.desafio_hidrico_realizado === 1 || item?.desafio_hidrico_realizado === '1';
+  const valor = item?.desafio_hidrico_realizado as unknown;
+  return valor === true || valor === 1 || valor === '1';
 }
 
 function buildFluidoterapiaPayload(): FluidoterapiaProntuarioPayload {
