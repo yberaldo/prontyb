@@ -6,8 +6,10 @@ import { criarFluidoterapia, criarProntuario } from '../api/prontuarios';
 import type {
   Clinica,
   CriarProntuarioPayload,
+  CateterFluidoterapia,
   FluidoterapiaProntuarioPayload,
   FluidoFluidoterapia,
+  MembroCanuladoFluidoterapia,
   Profissional,
   ProntuarioAnestesico,
 } from '../types/api';
@@ -182,6 +184,19 @@ const FLUIDOS_FLUIDOTERAPIA: Array<{ value: FluidoFluidoterapia; label: string }
   { value: 'solucao_fisiologica_09', label: 'Solucao fisiologica 0,9%' },
 ];
 
+const CATETERES_FLUIDOTERAPIA: Array<{ value: CateterFluidoterapia; label: string }> = [
+  { value: '24_amarelo', label: '24 amarelo' },
+  { value: '22_azul', label: '22 azul' },
+  { value: '20_rosa', label: '20 rosa' },
+];
+
+const MEMBROS_CANULADOS: Array<{ value: MembroCanuladoFluidoterapia; label: string }> = [
+  { value: 'membro_anterior_esquerdo', label: 'Membro anterior esquerdo' },
+  { value: 'membro_anterior_direito', label: 'Membro anterior direito' },
+  { value: 'membro_posterior_direito', label: 'Membro posterior direito' },
+  { value: 'membro_posterior_esquerdo', label: 'Membro posterior esquerdo' },
+];
+
 const DESAFIO_QUANTIDADE_OPCOES: Array<{ value: string; label: string }> = [
   { value: '1', label: '1 vez' },
   { value: '2', label: '2 vezes' },
@@ -220,6 +235,8 @@ const form = reactive({
 
 const fluidoterapiaForm = reactive({
   fluido: FLUIDOTERAPIA_PADRAO.fluido,
+  cateter_utilizado: '',
+  membro_canulado: '',
   taxa_ml_kg_h: FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h,
   desafio_hidrico_realizado: FLUIDOTERAPIA_PADRAO.desafio_hidrico_realizado,
   desafio_quantidade: FLUIDOTERAPIA_PADRAO.desafio_quantidade,
@@ -308,6 +325,12 @@ function buildFluidoterapiaPayload(): FluidoterapiaProntuarioPayload | null {
     taxa_ml_kg_h: taxaFinal,
     desafio_hidrico_realizado: desafioRealizado,
   };
+
+  const cateter = textValue(fluidoterapiaForm.cateter_utilizado) as CateterFluidoterapia | '';
+  if (cateter) payload.cateter_utilizado = cateter;
+
+  const membro = textValue(fluidoterapiaForm.membro_canulado) as MembroCanuladoFluidoterapia | '';
+  if (membro) payload.membro_canulado = membro;
 
   if (desafioRealizado) {
     const quantidade = parseQuantidade(fluidoterapiaForm.desafio_quantidade);
@@ -658,6 +681,26 @@ onMounted(loadOptions);
               step="0.1"
               type="number"
             />
+          </label>
+
+          <label class="field">
+            <span>Cateter utilizado</span>
+            <select v-model="fluidoterapiaForm.cateter_utilizado">
+              <option value="">Selecione</option>
+              <option v-for="item in CATETERES_FLUIDOTERAPIA" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Membro canulado</span>
+            <select v-model="fluidoterapiaForm.membro_canulado">
+              <option value="">Selecione</option>
+              <option v-for="item in MEMBROS_CANULADOS" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
           </label>
 
           <label class="field">

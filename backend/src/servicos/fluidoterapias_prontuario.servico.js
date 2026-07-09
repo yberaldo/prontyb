@@ -8,6 +8,29 @@ function isPositiveInt(v) {
 }
 
 const FLUIDOS = ['ringer_com_lactato','solucao_fisiologica_09'];
+const CATETERES = ['24_amarelo','22_azul','20_rosa'];
+const MEMBROS_CANULADOS = [
+  'membro_anterior_esquerdo',
+  'membro_anterior_direito',
+  'membro_posterior_direito',
+  'membro_posterior_esquerdo',
+];
+
+function normalizeOptionalChoice(dados, field, allowed, errorMessage) {
+  if (!Object.prototype.hasOwnProperty.call(dados, field)) return;
+
+  const valor = dados[field];
+  if (valor === null || typeof valor === 'undefined' || String(valor).trim() === '') {
+    dados[field] = null;
+    return;
+  }
+
+  if (typeof valor !== 'string' || !allowed.includes(valor)) {
+    const err = new Error(errorMessage);
+    err.code = 'BAD_REQUEST';
+    throw err;
+  }
+}
 
 module.exports = {
   _serialize(reg) {
@@ -16,6 +39,8 @@ module.exports = {
       id: reg.id,
       prontuario_id: reg.prontuario_id,
       fluido: reg.fluido,
+      cateter_utilizado: reg.cateter_utilizado,
+      membro_canulado: reg.membro_canulado,
       taxa_ml_kg_h: reg.taxa_ml_kg_h === null ? null : Number(reg.taxa_ml_kg_h),
       desafio_hidrico_realizado: reg.desafio_hidrico_realizado ? 1 : 0,
       desafio_volume_ml_kg: reg.desafio_volume_ml_kg === null ? null : Number(reg.desafio_volume_ml_kg),
@@ -41,7 +66,7 @@ module.exports = {
 
     if (!dados || Object.keys(dados).length === 0) { const err = new Error('body vazio'); err.code = 'BAD_REQUEST'; throw err; }
 
-    const allowed = ['fluido','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
+    const allowed = ['fluido','cateter_utilizado','membro_canulado','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
     for (const k of Object.keys(dados)) {
       if (!allowed.includes(k)) { const err = new Error('campo desconhecido no body'); err.code = 'BAD_REQUEST'; throw err; }
     }
@@ -53,6 +78,9 @@ module.exports = {
 
     // validar fluido
     if (!FLUIDOS.includes(dados.fluido)) { const err = new Error('fluido invalido'); err.code = 'BAD_REQUEST'; throw err; }
+
+    normalizeOptionalChoice(dados, 'cateter_utilizado', CATETERES, 'cateter_utilizado invalido');
+    normalizeOptionalChoice(dados, 'membro_canulado', MEMBROS_CANULADOS, 'membro_canulado invalido');
 
     // validar numeros quando presentes
     if (Object.prototype.hasOwnProperty.call(dados, 'taxa_ml_kg_h')) {
@@ -111,7 +139,7 @@ module.exports = {
       const err = new Error('campo proibido no body'); err.code = 'BAD_REQUEST'; throw err;
     }
 
-    const allowed = ['fluido','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
+    const allowed = ['fluido','cateter_utilizado','membro_canulado','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
     for (const k of Object.keys(dados)) {
       if (!allowed.includes(k)) { const err = new Error('campo desconhecido no body'); err.code = 'BAD_REQUEST'; throw err; }
     }
@@ -119,6 +147,9 @@ module.exports = {
     if (Object.prototype.hasOwnProperty.call(dados, 'fluido')) {
       if (!FLUIDOS.includes(dados.fluido)) { const err = new Error('fluido invalido'); err.code = 'BAD_REQUEST'; throw err; }
     }
+
+    normalizeOptionalChoice(dados, 'cateter_utilizado', CATETERES, 'cateter_utilizado invalido');
+    normalizeOptionalChoice(dados, 'membro_canulado', MEMBROS_CANULADOS, 'membro_canulado invalido');
 
     if (Object.prototype.hasOwnProperty.call(dados, 'taxa_ml_kg_h')) {
       const v = Number(dados.taxa_ml_kg_h);

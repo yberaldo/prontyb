@@ -13,10 +13,12 @@ import {
 } from '../api/prontuarios';
 import type {
   AnexoProntuario,
+  CateterFluidoterapia,
   FluidoterapiaProntuario,
   FluidoterapiaProntuarioPayload,
   FluidoFluidoterapia,
   MedicacaoProntuario,
+  MembroCanuladoFluidoterapia,
   MonitorizacaoProntuario,
   ProntuarioAnestesico,
 } from '../types/api';
@@ -39,6 +41,19 @@ interface SectionState<T> {
 const FLUIDOS_FLUIDOTERAPIA: Array<{ value: FluidoFluidoterapia; label: string }> = [
   { value: 'ringer_com_lactato', label: 'Ringer com lactato' },
   { value: 'solucao_fisiologica_09', label: 'Solucao fisiologica 0,9%' },
+];
+
+const CATETERES_FLUIDOTERAPIA: Array<{ value: CateterFluidoterapia; label: string }> = [
+  { value: '24_amarelo', label: '24 amarelo' },
+  { value: '22_azul', label: '22 azul' },
+  { value: '20_rosa', label: '20 rosa' },
+];
+
+const MEMBROS_CANULADOS: Array<{ value: MembroCanuladoFluidoterapia; label: string }> = [
+  { value: 'membro_anterior_esquerdo', label: 'Membro anterior esquerdo' },
+  { value: 'membro_anterior_direito', label: 'Membro anterior direito' },
+  { value: 'membro_posterior_direito', label: 'Membro posterior direito' },
+  { value: 'membro_posterior_esquerdo', label: 'Membro posterior esquerdo' },
 ];
 
 const DESAFIO_QUANTIDADE_OPCOES: Array<{ value: string; label: string }> = [
@@ -74,6 +89,8 @@ const monitorizacoes = reactive<SectionState<MonitorizacaoProntuario>>({ data: [
 
 const fluidoterapiaForm = reactive({
   ...FLUIDOTERAPIA_PADRAO,
+  cateter_utilizado: '',
+  membro_canulado: '',
 });
 
 function getErrorMessage(err: unknown, fallback: string) {
@@ -82,6 +99,8 @@ function getErrorMessage(err: unknown, fallback: string) {
 
 function resetFluidoterapiaForm() {
   fluidoterapiaForm.fluido = FLUIDOTERAPIA_PADRAO.fluido;
+  fluidoterapiaForm.cateter_utilizado = '';
+  fluidoterapiaForm.membro_canulado = '';
   fluidoterapiaForm.taxa_ml_kg_h = FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h;
   fluidoterapiaForm.desafio_hidrico_realizado = FLUIDOTERAPIA_PADRAO.desafio_hidrico_realizado;
   fluidoterapiaForm.desafio_volume_ml_kg = FLUIDOTERAPIA_PADRAO.desafio_volume_ml_kg;
@@ -99,6 +118,8 @@ function syncFluidoterapiaForm(item?: FluidoterapiaProntuario | null) {
 
   fluidoterapiaEditId.value = item.id;
   fluidoterapiaForm.fluido = (item.fluido as FluidoFluidoterapia) || FLUIDOTERAPIA_PADRAO.fluido;
+  fluidoterapiaForm.cateter_utilizado = item.cateter_utilizado ? String(item.cateter_utilizado) : '';
+  fluidoterapiaForm.membro_canulado = item.membro_canulado ? String(item.membro_canulado) : '';
   fluidoterapiaForm.taxa_ml_kg_h = item.taxa_ml_kg_h === null || typeof item.taxa_ml_kg_h === 'undefined'
     ? ''
     : String(item.taxa_ml_kg_h);
@@ -146,6 +167,21 @@ function formatFluido(value?: string | null) {
   return formatValue(value);
 }
 
+function formatCateter(value?: string | null) {
+  if (value === '24_amarelo') return '24 amarelo';
+  if (value === '22_azul') return '22 azul';
+  if (value === '20_rosa') return '20 rosa';
+  return formatValue(value);
+}
+
+function formatMembroCanulado(value?: string | null) {
+  if (value === 'membro_anterior_esquerdo') return 'Membro anterior esquerdo';
+  if (value === 'membro_anterior_direito') return 'Membro anterior direito';
+  if (value === 'membro_posterior_direito') return 'Membro posterior direito';
+  if (value === 'membro_posterior_esquerdo') return 'Membro posterior esquerdo';
+  return formatValue(value);
+}
+
 function formatQuantidadeDesafio(value?: string | number | null) {
   if (value === null || typeof value === 'undefined' || value === '') return 'Livre';
 
@@ -175,6 +211,12 @@ function buildFluidoterapiaPayload(): FluidoterapiaProntuarioPayload {
     taxa_ml_kg_h: parseOptionalNumber(fluidoterapiaForm.taxa_ml_kg_h) ?? Number(FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h),
     desafio_hidrico_realizado: desafioRealizado,
   };
+
+  const cateter = textValue(fluidoterapiaForm.cateter_utilizado) as CateterFluidoterapia | '';
+  if (cateter) payload.cateter_utilizado = cateter;
+
+  const membro = textValue(fluidoterapiaForm.membro_canulado) as MembroCanuladoFluidoterapia | '';
+  if (membro) payload.membro_canulado = membro;
 
   if (!Number.isFinite(Number(payload.taxa_ml_kg_h)) || Number(payload.taxa_ml_kg_h) < 0) {
     throw new Error('Taxa ml/kg/h deve ser um numero maior ou igual a zero.');
@@ -384,6 +426,26 @@ onMounted(reloadAll);
           </label>
 
           <label class="field">
+            <span>Cateter utilizado</span>
+            <select v-model="fluidoterapiaForm.cateter_utilizado">
+              <option value="">Selecione</option>
+              <option v-for="item in CATETERES_FLUIDOTERAPIA" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Membro canulado</span>
+            <select v-model="fluidoterapiaForm.membro_canulado">
+              <option value="">Selecione</option>
+              <option v-for="item in MEMBROS_CANULADOS" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
             <span>Teve desafio hidrico?</span>
             <select v-model="fluidoterapiaForm.desafio_hidrico_realizado">
               <option value="0">Nao</option>
@@ -450,6 +512,8 @@ onMounted(reloadAll);
         <article v-for="item in fluidoterapias.data" :key="item.id" class="mini-card">
           <strong>{{ formatFluido(item.fluido) }}</strong>
           <dl class="mini-grid">
+            <InfoRow label="Cateter utilizado" :value="formatCateter(item.cateter_utilizado)" />
+            <InfoRow label="Membro canulado" :value="formatMembroCanulado(item.membro_canulado)" />
             <InfoRow label="Taxa ml/kg/h" :value="formatValue(item.taxa_ml_kg_h)" />
             <template v-if="temDesafioHidrico(item)">
               <InfoRow label="Desafio hidrico" :value="formatBoolean(item.desafio_hidrico_realizado)" />

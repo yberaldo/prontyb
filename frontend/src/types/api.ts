@@ -55,9 +55,17 @@ export interface CriarProntuarioPayload {
 }
 
 export type FluidoFluidoterapia = 'ringer_com_lactato' | 'solucao_fisiologica_09';
+export type CateterFluidoterapia = '24_amarelo' | '22_azul' | '20_rosa';
+export type MembroCanuladoFluidoterapia =
+  | 'membro_anterior_esquerdo'
+  | 'membro_anterior_direito'
+  | 'membro_posterior_direito'
+  | 'membro_posterior_esquerdo';
 
 export interface FluidoterapiaProntuarioPayload {
   fluido: FluidoFluidoterapia;
+  cateter_utilizado?: CateterFluidoterapia | null;
+  membro_canulado?: MembroCanuladoFluidoterapia | null;
   taxa_ml_kg_h?: number | null;
   desafio_hidrico_realizado?: boolean | number | null;
   desafio_volume_ml_kg?: number | null;
@@ -110,6 +118,8 @@ export interface FluidoterapiaProntuario {
   id: number;
   prontuario_id: number;
   fluido?: string | null;
+  cateter_utilizado?: CateterFluidoterapia | null;
+  membro_canulado?: MembroCanuladoFluidoterapia | null;
   taxa_ml_kg_h?: string | number | null;
   desafio_hidrico_realizado?: boolean | number | null;
   desafio_volume_ml_kg?: string | number | null;

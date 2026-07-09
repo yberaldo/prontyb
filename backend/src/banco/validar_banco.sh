@@ -120,10 +120,18 @@ fi
 # apenas a exibicao do CREATE TABLE feita anteriormente.
 
 # verificar fluidoterapias_prontuario colunas e defaults
-for col in desafio_hidrico_realizado desafio_volume_ml_kg desafio_tempo_min desafio_quantidade desafio_motivo; do
+for col in cateter_utilizado membro_canulado desafio_hidrico_realizado desafio_volume_ml_kg desafio_tempo_min desafio_quantidade desafio_motivo; do
   cnt=$(mysql --defaults-extra-file="$TMPFILE" -sN -D "$DB_NAME" -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='fluidoterapias_prontuario' AND COLUMN_NAME='$col';")
   if [ "$cnt" -ne 1 ]; then
     echo "ERRO: coluna $col ausente em fluidoterapias_prontuario" >&2
+    exit 1
+  fi
+done
+
+for col in cateter_utilizado membro_canulado; do
+  nullable=$(mysql --defaults-extra-file="$TMPFILE" -sN -D "$DB_NAME" -e "SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB_NAME' AND TABLE_NAME='fluidoterapias_prontuario' AND COLUMN_NAME='$col';")
+  if [ "$nullable" != 'YES' ]; then
+    echo "ERRO: coluna $col deve ser nullable em fluidoterapias_prontuario" >&2
     exit 1
   fi
 done

@@ -5,7 +5,7 @@ module.exports = {
   async listarPorProntuarioId(fastify, prontuario_id) {
     const sql = `
       SELECT
-        id, prontuario_id, fluido, taxa_ml_kg_h, desafio_hidrico_realizado, desafio_volume_ml_kg, desafio_tempo_min, desafio_quantidade, desafio_motivo, criado_em, atualizado_em
+        id, prontuario_id, fluido, cateter_utilizado, membro_canulado, taxa_ml_kg_h, desafio_hidrico_realizado, desafio_volume_ml_kg, desafio_tempo_min, desafio_quantidade, desafio_motivo, criado_em, atualizado_em
       FROM fluidoterapias_prontuario
       WHERE prontuario_id = ?
       ORDER BY id ASC
@@ -23,7 +23,7 @@ module.exports = {
     }
     const sql = `
       SELECT
-        f.id, f.prontuario_id, f.fluido, f.taxa_ml_kg_h, f.desafio_hidrico_realizado, f.desafio_volume_ml_kg, f.desafio_tempo_min, f.desafio_quantidade, f.desafio_motivo, f.criado_em, f.atualizado_em
+        f.id, f.prontuario_id, f.fluido, f.cateter_utilizado, f.membro_canulado, f.taxa_ml_kg_h, f.desafio_hidrico_realizado, f.desafio_volume_ml_kg, f.desafio_tempo_min, f.desafio_quantidade, f.desafio_motivo, f.criado_em, f.atualizado_em
       FROM fluidoterapias_prontuario f
       WHERE ${where}
       LIMIT 1
@@ -33,7 +33,7 @@ module.exports = {
   },
 
   async criar(fastify, dados = {}) {
-    const allowed = ['prontuario_id','fluido','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
+    const allowed = ['prontuario_id','fluido','cateter_utilizado','membro_canulado','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
     const campos = [];
     const params = [];
     for (const k of allowed) {
@@ -49,7 +49,7 @@ module.exports = {
   },
 
   async atualizar(fastify, id, dados = {}) {
-    const allowed = ['fluido','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
+    const allowed = ['fluido','cateter_utilizado','membro_canulado','taxa_ml_kg_h','desafio_hidrico_realizado','desafio_volume_ml_kg','desafio_tempo_min','desafio_quantidade','desafio_motivo'];
     const campos = [];
     const params = [];
     for (const k of allowed) {
