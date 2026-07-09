@@ -54,6 +54,18 @@ export interface CriarProntuarioPayload {
   observacoes_pre_anestesicas?: string | null;
 }
 
+export type FluidoFluidoterapia = 'ringer_com_lactato' | 'solucao_fisiologica_09';
+
+export interface FluidoterapiaProntuarioPayload {
+  fluido: FluidoFluidoterapia;
+  taxa_ml_kg_h?: number | null;
+  desafio_hidrico_realizado?: boolean | number | null;
+  desafio_volume_ml_kg?: number | null;
+  desafio_tempo_min?: number | null;
+  desafio_quantidade?: number | null;
+  desafio_motivo?: string | null;
+}
+
 export interface Clinica {
   id: number;
   nome: string;

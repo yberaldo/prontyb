@@ -1,8 +1,9 @@
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, apiPut } from './client';
 import type {
   AnexoProntuario,
   CriarProntuarioPayload,
   FluidoterapiaProntuario,
+  FluidoterapiaProntuarioPayload,
   MedicacaoProntuario,
   MonitorizacaoProntuario,
   ProntuarioAnestesico,
@@ -30,6 +31,24 @@ export function listarMedicacoes(id: number) {
 
 export function listarFluidoterapias(id: number) {
   return apiGet<FluidoterapiaProntuario[]>(`${prontuarioPath(id)}/fluidoterapias`);
+}
+
+export function criarFluidoterapia(prontuarioId: number, payload: FluidoterapiaProntuarioPayload) {
+  return apiPost<FluidoterapiaProntuario, FluidoterapiaProntuarioPayload>(
+    `${prontuarioPath(prontuarioId)}/fluidoterapias`,
+    payload,
+  );
+}
+
+export function atualizarFluidoterapia(
+  prontuarioId: number,
+  fluidoterapiaId: number,
+  payload: FluidoterapiaProntuarioPayload,
+) {
+  return apiPut<FluidoterapiaProntuario, FluidoterapiaProntuarioPayload>(
+    `${prontuarioPath(prontuarioId)}/fluidoterapias/${encodeURIComponent(String(fluidoterapiaId))}`,
+    payload,
+  );
 }
 
 export function listarAnexos(id: number) {
