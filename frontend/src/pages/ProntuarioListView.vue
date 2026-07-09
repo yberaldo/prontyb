@@ -14,20 +14,30 @@ const emit = defineEmits<{
 }>();
 
 const prontuarios = ref<ProntuarioAnestesico[]>([]);
+const busca = ref('');
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-async function loadProntuarios() {
+async function loadProntuarios(termo = busca.value) {
   loading.value = true;
   error.value = null;
 
   try {
-    prontuarios.value = await listarProntuarios();
+    prontuarios.value = await listarProntuarios(termo);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Nao foi possivel carregar os prontuarios.';
   } finally {
     loading.value = false;
   }
+}
+
+function buscarProntuarios() {
+  void loadProntuarios(busca.value);
+}
+
+function limparBusca() {
+  busca.value = '';
+  void loadProntuarios('');
 }
 
 onMounted(loadProntuarios);
@@ -51,6 +61,29 @@ onMounted(loadProntuarios);
     </header>
 
     <section class="content-stack">
+      <section class="section-block form-section">
+        <form class="content-stack" novalidate @submit.prevent="buscarProntuarios">
+          <label class="field field-wide">
+            <span>Busca geral</span>
+            <input
+              v-model="busca"
+              autocomplete="off"
+              placeholder="Buscar por animal, tutor, procedimento, clinica ou equipe"
+              type="search"
+            />
+          </label>
+
+          <div class="form-actions">
+            <button class="secondary-action" type="button" :disabled="loading || !busca.trim()" @click="limparBusca">
+              Limpar
+            </button>
+            <button class="primary-action" type="submit" :disabled="loading">
+              Buscar
+            </button>
+          </div>
+        </form>
+      </section>
+
       <p v-if="props.notice" class="state-card state-success">{{ props.notice }}</p>
       <p v-if="loading" class="state-card">Carregando prontuarios...</p>
       <p v-else-if="error" class="state-card state-error">{{ error }}</p>

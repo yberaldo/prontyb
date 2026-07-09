@@ -10,8 +10,10 @@ import type {
 
 const prontuarioPath = (id: number) => `/prontuarios_anestesicos/${encodeURIComponent(String(id))}`;
 
-export function listarProntuarios() {
-  return apiGet<ProntuarioAnestesico[]>('/prontuarios_anestesicos');
+export function listarProntuarios(busca?: string | null) {
+  const termo = typeof busca === 'string' ? busca.trim() : '';
+  const query = termo ? `?busca=${encodeURIComponent(termo)}` : '';
+  return apiGet<ProntuarioAnestesico[]>(`/prontuarios_anestesicos${query}`);
 }
 
 export function buscarProntuario(id: number) {
