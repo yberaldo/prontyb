@@ -333,6 +333,18 @@ async function loadOptions() {
     clinicas.value = clinicasData;
     anestesistas.value = anestesistasData;
     cirurgioes.value = cirurgioesData;
+
+    if (!textValue(form.anestesista_id)) {
+      const anestesistaPadrao = anestesistasData.find((profissional) => {
+        const nomePadrao = profissional.nome_completo === 'Yulian Passador Beraldo';
+        const funcaoValida = profissional.funcao === 'anestesista' || profissional.funcao === 'ambos';
+        return nomePadrao && funcaoValida;
+      });
+
+      if (anestesistaPadrao) {
+        form.anestesista_id = String(anestesistaPadrao.id);
+      }
+    }
   } catch (err) {
     setError(getErrorMessage(err, 'Nao foi possivel carregar as listas do formulario.'));
   } finally {
