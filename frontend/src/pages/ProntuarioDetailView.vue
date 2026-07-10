@@ -567,69 +567,60 @@ onMounted(reloadAll);
         empty-text="Nenhuma medicacao registrada."
       >
         <div class="form-grid">
-          <article
-            v-for="secao in MEDICACAO_PRE_SECOES"
-            :key="secao.categoria"
-            v-if="getMedicacoesPorCategoria(secao.categoria).length > 0"
-            class="mini-card field-wide"
-          >
-            <strong>Medicacao pre-anestesica - {{ secao.titulo }}</strong>
-            <div class="form-grid">
-              <article v-for="item in getMedicacoesPorCategoria(secao.categoria)" :key="item.id" class="mini-card field-wide">
-                <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
-                <dl class="mini-grid">
-                  <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
-                  <InfoRow label="Dose" :value="medicationDose(item)" />
-                  <InfoRow label="Motivo" :value="item.motivo_uso" />
-                </dl>
-              </article>
-            </div>
-          </article>
+          <template v-for="secao in MEDICACAO_PRE_SECOES" :key="secao.categoria">
+            <article v-if="getMedicacoesPorCategoria(secao.categoria).length > 0" class="mini-card field-wide">
+              <strong>Medicacao pre-anestesica - {{ secao.titulo }}</strong>
+              <div class="form-grid">
+                <article v-for="item in getMedicacoesPorCategoria(secao.categoria)" :key="item.id" class="mini-card field-wide">
+                  <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
+                  <dl class="mini-grid">
+                    <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
+                    <InfoRow label="Dose" :value="medicationDose(item)" />
+                    <InfoRow label="Motivo" :value="item.motivo_uso" />
+                  </dl>
+                </article>
+              </div>
+            </article>
+          </template>
 
-          <article
-            v-for="secao in MEDICACAO_SECOES"
-            :key="secao.categoria"
-            v-if="getMedicacoesPorCategoria(secao.categoria).length > 0"
-            class="mini-card field-wide"
-          >
-            <strong>{{ secao.titulo }}</strong>
-            <div class="form-grid">
-              <article v-for="item in getMedicacoesPorCategoria(secao.categoria)" :key="item.id" class="mini-card field-wide">
-                <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
-                <dl class="mini-grid">
-                  <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
-                  <InfoRow label="Dose" :value="medicationDose(item)" />
-                  <InfoRow label="Motivo" :value="item.motivo_uso" />
-                </dl>
-              </article>
-            </div>
-          </article>
+          <template v-for="secao in MEDICACAO_SECOES" :key="secao.categoria">
+            <article v-if="getMedicacoesPorCategoria(secao.categoria).length > 0" class="mini-card field-wide">
+              <strong>{{ secao.titulo }}</strong>
+              <div class="form-grid">
+                <article v-for="item in getMedicacoesPorCategoria(secao.categoria)" :key="item.id" class="mini-card field-wide">
+                  <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
+                  <dl class="mini-grid">
+                    <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
+                    <InfoRow label="Dose" :value="medicationDose(item)" />
+                    <InfoRow label="Motivo" :value="item.motivo_uso" />
+                  </dl>
+                </article>
+              </div>
+            </article>
+          </template>
 
           <article v-if="getMedicacoesPorCategoria('trans_anestesica').length > 0" class="mini-card field-wide">
             <strong>Medicacoes trans-anestesicas</strong>
             <div class="form-grid">
-              <article
-                v-for="subcategoria in TRANS_SUBCATEGORIAS"
-                :key="subcategoria.value"
-                v-if="getMedicacoesTransPorSubcategoria(subcategoria.value).length > 0"
-                class="mini-card field-wide"
-              >
-                <strong>{{ subcategoria.label }}</strong>
-                <div class="form-grid">
-                  <article
-                    v-for="item in getMedicacoesTransPorSubcategoria(subcategoria.value)"
-                    :key="item.id"
-                    class="mini-card field-wide"
-                  >
-                    <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
-                    <dl class="mini-grid">
-                      <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
-                      <InfoRow label="Dose" :value="medicationDose(item)" />
-                      <InfoRow label="Motivo" :value="item.motivo_uso" />
-                    </dl>
-                  </article>
-                </div>
-              </article>
+              <template v-for="subcategoria in TRANS_SUBCATEGORIAS" :key="subcategoria.value">
+                <article v-if="getMedicacoesTransPorSubcategoria(subcategoria.value).length > 0" class="mini-card field-wide">
+                  <strong>{{ subcategoria.label }}</strong>
+                  <div class="form-grid">
+                    <article
+                      v-for="item in getMedicacoesTransPorSubcategoria(subcategoria.value)"
+                      :key="item.id"
+                      class="mini-card field-wide"
+                    >
+                      <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
+                      <dl class="mini-grid">
+                        <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
+                        <InfoRow label="Dose" :value="medicationDose(item)" />
+                        <InfoRow label="Motivo" :value="item.motivo_uso" />
+                      </dl>
+                    </article>
+                  </div>
+                </article>
+              </template>
             </div>
           </article>
         </div>
