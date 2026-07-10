@@ -75,6 +75,36 @@ const FLUIDOTERAPIA_PADRAO = {
 
 const FARMACOS_INDUCAO_INALATORIOS = new Set(['isoflurano', 'sevoflurano']);
 
+const MEDICACAO_PRE_SECOES = [
+  { categoria: 'pre_anestesica_sedativo' as const, titulo: 'Tranquilizante / Sedativo' },
+  { categoria: 'pre_anestesica_opioide' as const, titulo: 'Opioide' },
+];
+
+const MEDICACAO_SECOES = [
+  { categoria: 'inducao' as const, titulo: 'Inducao' },
+  { categoria: 'manutencao' as const, titulo: 'Manutencao' },
+];
+
+const TRANS_SUBCATEGORIAS = [
+  { value: 'analgesia', label: 'Analgesia' },
+  { value: 'vasopressores_inotropicos', label: 'Vasopressores / Inotropicos' },
+  { value: 'anticolinergicos', label: 'Anticolinergicos' },
+  { value: 'antiemeticos', label: 'Antiemeticos' },
+  { value: 'reversores', label: 'Reversores' },
+  { value: 'outros', label: 'Outros' },
+] as const;
+
+type TransSubcategoria = typeof TRANS_SUBCATEGORIAS[number]['value'];
+
+const TRANS_SUBCATEGORIA_LABELS: Record<TransSubcategoria, string> = {
+  analgesia: 'Analgesia',
+  vasopressores_inotropicos: 'Vasopressores / Inotropicos',
+  anticolinergicos: 'Anticolinergicos',
+  antiemeticos: 'Antiemeticos',
+  reversores: 'Reversores',
+  outros: 'Outros',
+};
+
 const prontuario = ref<ProntuarioAnestesico | null>(null);
 const loadingProntuario = ref(false);
 const errorProntuario = ref<string | null>(null);
@@ -204,9 +234,35 @@ function normalizeMedicacaoFarmacoNome(nome: string) {
     .trim();
 }
 
-function isMedicacaoInducaoInalatoria(item: MedicacaoProntuario) {
-  if (item.categoria !== 'inducao') return false;
+function isTransSubcategoria(value: string): value is TransSubcategoria {
+  return Object.prototype.hasOwnProperty.call(TRANS_SUBCATEGORIA_LABELS, value);
+}
+
+function getMedicacoesPorCategoria(categoria: MedicacaoProntuario['categoria']) {
+  return medicacoes.data.filter((item) => item.categoria === categoria);
+}
+
+function getMedicacoesTransPorSubcategoria(subcategoria: string) {
+  if (!isTransSubcategoria(subcategoria)) {
+    return [];
+  }
+
+  return medicacoes.data.filter((item) => item.categoria === 'trans_anestesica' && item.subcategoria === subcategoria);
+}
+
+function formatMedicacaoSubcategoriaLabel(subcategoria?: string | null) {
+  if (!subcategoria) return 'Nao informado';
+  if (subcategoria === 'tranquilizantes_sedativos') return 'Tranquilizante / Sedativo';
+  if (subcategoria === 'opioides') return 'Opioide';
+  if (subcategoria === 'inducao') return 'Inducao';
+  if (subcategoria === 'manutencao') return 'Manutencao';
+  if (isTransSubcategoria(subcategoria)) return TRANS_SUBCATEGORIA_LABELS[subcategoria];
+  return subcategoria;
+}
+
+function isMedicacaoInalatoria(item: MedicacaoProntuario) {
   if (!item.farmaco_nome) return false;
+  if (item.categoria !== 'inducao' && item.categoria !== 'manutencao') return false;
   return FARMACOS_INDUCAO_INALATORIOS.has(normalizeMedicacaoFarmacoNome(item.farmaco_nome));
 }
 
@@ -365,7 +421,7 @@ async function submitFluidoterapia() {
 }
 
 function medicationDose(item: MedicacaoProntuario) {
-  if (isMedicacaoInducaoInalatoria(item)) {
+  if (isMedicacaoInalatoria(item)) {
     return 'Via inalatória';
   }
 
@@ -510,15 +566,73 @@ onMounted(reloadAll);
         :empty="medicacoes.data.length === 0"
         empty-text="Nenhuma medicacao registrada."
       >
-        <article v-for="item in medicacoes.data" :key="item.id" class="mini-card">
-          <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
-          <dl class="mini-grid">
-            <InfoRow label="Categoria" :value="item.categoria" />
-            <InfoRow label="Subcategoria" :value="item.subcategoria" />
-            <InfoRow label="Dose" :value="medicationDose(item)" />
-            <InfoRow label="Motivo" :value="item.motivo_uso" />
-          </dl>
-        </article>
+        <div class="form-grid">
+          <article
+            v-for="secao in MEDICACAO_PRE_SECOES"
+            :key="secao.categoria"
+            v-if="getMedicacoesPorCategoria(secao.categoria).length > 0"
+            class="mini-card field-wide"
+          >
+            <strong>Medicacao pre-anestesica - {{ secao.titulo }}</strong>
+            <div class="form-grid">
+              <article v-for="item in getMedicacoesPorCategoria(secao.categoria)" :key="item.id" class="mini-card field-wide">
+                <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
+                <dl class="mini-grid">
+                  <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
+                  <InfoRow label="Dose" :value="medicationDose(item)" />
+                  <InfoRow label="Motivo" :value="item.motivo_uso" />
+                </dl>
+              </article>
+            </div>
+          </article>
+
+          <article
+            v-for="secao in MEDICACAO_SECOES"
+            :key="secao.categoria"
+            v-if="getMedicacoesPorCategoria(secao.categoria).length > 0"
+            class="mini-card field-wide"
+          >
+            <strong>{{ secao.titulo }}</strong>
+            <div class="form-grid">
+              <article v-for="item in getMedicacoesPorCategoria(secao.categoria)" :key="item.id" class="mini-card field-wide">
+                <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
+                <dl class="mini-grid">
+                  <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
+                  <InfoRow label="Dose" :value="medicationDose(item)" />
+                  <InfoRow label="Motivo" :value="item.motivo_uso" />
+                </dl>
+              </article>
+            </div>
+          </article>
+
+          <article v-if="getMedicacoesPorCategoria('trans_anestesica').length > 0" class="mini-card field-wide">
+            <strong>Medicacoes trans-anestesicas</strong>
+            <div class="form-grid">
+              <article
+                v-for="subcategoria in TRANS_SUBCATEGORIAS"
+                :key="subcategoria.value"
+                v-if="getMedicacoesTransPorSubcategoria(subcategoria.value).length > 0"
+                class="mini-card field-wide"
+              >
+                <strong>{{ subcategoria.label }}</strong>
+                <div class="form-grid">
+                  <article
+                    v-for="item in getMedicacoesTransPorSubcategoria(subcategoria.value)"
+                    :key="item.id"
+                    class="mini-card field-wide"
+                  >
+                    <strong>{{ item.farmaco_nome || item.subcategoria || item.categoria || `Medicacao #${item.id}` }}</strong>
+                    <dl class="mini-grid">
+                      <InfoRow label="Subcategoria" :value="formatMedicacaoSubcategoriaLabel(item.subcategoria)" />
+                      <InfoRow label="Dose" :value="medicationDose(item)" />
+                      <InfoRow label="Motivo" :value="item.motivo_uso" />
+                    </dl>
+                  </article>
+                </div>
+              </article>
+            </div>
+          </article>
+        </div>
       </ReadOnlySection>
 
       <ReadOnlySection

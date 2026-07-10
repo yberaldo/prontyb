@@ -238,9 +238,41 @@ const INDUCAO_CONFIG = {
   subcategoria: 'inducao',
 };
 
+const MANUTENCAO_CONFIG = {
+  titulo: 'Manutencao',
+  categoria: 'manutencao' as const,
+  subcategoria: 'manutencao',
+};
+
+const TRANS_CONFIG = {
+  titulo: 'Medicacoes trans-anestesicas',
+  categoria: 'trans_anestesica' as const,
+};
+
 const MAX_LINHAS_INDUCAO = 5;
 const UNIDADE_INDUCAO_MG_KG = 'mg/kg';
 const FARMACOS_INDUCAO_INALATORIOS = new Set(['isoflurano', 'sevoflurano']);
+const FARMACOS_INALATORIOS = FARMACOS_INDUCAO_INALATORIOS;
+
+const TRANS_SUBCATEGORIAS = [
+  { value: 'analgesia', label: 'Analgesia' },
+  { value: 'vasopressores_inotropicos', label: 'Vasopressores / Inotropicos' },
+  { value: 'anticolinergicos', label: 'Anticolinergicos' },
+  { value: 'antiemeticos', label: 'Antiemeticos' },
+  { value: 'reversores', label: 'Reversores' },
+  { value: 'outros', label: 'Outros' },
+] as const;
+
+type TransSubcategoria = typeof TRANS_SUBCATEGORIAS[number]['value'];
+
+const TRANS_SUBCATEGORIA_LABELS: Record<TransSubcategoria, string> = {
+  analgesia: 'Analgesia',
+  vasopressores_inotropicos: 'Vasopressores / Inotropicos',
+  anticolinergicos: 'Anticolinergicos',
+  antiemeticos: 'Antiemeticos',
+  reversores: 'Reversores',
+  outros: 'Outros',
+};
 
 const UNIDADES_MPA_OUTRA_DOSE = [
   { value: 'mg/kg', label: 'mg/kg' },
@@ -249,6 +281,7 @@ const UNIDADES_MPA_OUTRA_DOSE = [
 
 interface MedicacaoBlockForm {
   id: number;
+  subcategoria: string;
   farmaco_id: string;
   dose_id: string;
   dose_livre: string;
@@ -259,9 +292,10 @@ interface MedicacaoBlockForm {
 
 let proximoIdMedicacaoBlock = 1;
 
-function createMedicacaoBlockForm(): MedicacaoBlockForm {
+function createMedicacaoBlockForm(subcategoria = ''): MedicacaoBlockForm {
   return {
     id: proximoIdMedicacaoBlock++,
+    subcategoria,
     farmaco_id: '',
     dose_id: '',
     dose_livre: '',
@@ -311,12 +345,22 @@ const medicacaoInducaoForm = reactive({
   linhas: [createMedicacaoBlockForm(), createMedicacaoBlockForm()],
 });
 
+const medicacaoManutencaoForm = reactive({
+  linhas: [createMedicacaoBlockForm()],
+});
+
+const medicacaoTransForm = reactive({
+  linhas: [createMedicacaoBlockForm()],
+});
+
 const clinicas = ref<Clinica[]>([]);
 const anestesistas = ref<Profissional[]>([]);
 const cirurgioes = ref<Profissional[]>([]);
 const farmacosSedativo = ref<Farmaco[]>([]);
 const farmacosOpioide = ref<Farmaco[]>([]);
 const farmacosInducao = ref<Farmaco[]>([]);
+const farmacosManutencao = ref<Farmaco[]>([]);
+const farmacosTransPorSubcategoria = reactive<Record<string, Farmaco[]>>({});
 const loadingOptions = ref(false);
 const loadingMedicacaoOptions = ref(false);
 const saving = ref(false);
@@ -397,19 +441,53 @@ function getInducaoBlockForm(index: number) {
   return medicacaoInducaoForm.linhas[index];
 }
 
-function getMedicacaoFarmacos(chave: keyof typeof MPA_CONFIG | 'inducao') {
+function getManutencaoBlockForm(index: number) {
+  return medicacaoManutencaoForm.linhas[index];
+}
+
+function getTransBlockForm(index: number) {
+  return medicacaoTransForm.linhas[index];
+}
+
+function getMedicacaoFarmacos(chave: keyof typeof MPA_CONFIG | 'inducao' | 'manutencao') {
   if (chave === 'sedativo') return farmacosSedativo.value;
   if (chave === 'opioide') return farmacosOpioide.value;
+  if (chave === 'manutencao') return farmacosManutencao.value;
   return farmacosInducao.value;
+}
+
+function getMedicacaoTransFarmacos(subcategoria: string) {
+  if (!isTransSubcategoria(subcategoria)) {
+    return [];
+  }
+
+  return farmacosTransPorSubcategoria[subcategoria] || [];
 }
 
 function getDosesDoFarmaco(farmacoId: number) {
   return dosesPorFarmaco[farmacoId] || [];
 }
 
+function getFarmacosTransCadastrados() {
+  return Object.values(farmacosTransPorSubcategoria).reduce<Farmaco[]>(
+    (todos, farmacos) => todos.concat(farmacos),
+    [],
+  );
+}
+
 function getFarmacoById(farmacoId: number) {
-  const todos = [...farmacosSedativo.value, ...farmacosOpioide.value, ...farmacosInducao.value];
+  const todos = [
+    ...farmacosSedativo.value,
+    ...farmacosOpioide.value,
+    ...farmacosInducao.value,
+    ...farmacosManutencao.value,
+    ...getFarmacosTransCadastrados(),
+  ];
   return todos.find((farmaco) => farmaco.id === farmacoId) || null;
+}
+
+function isTransSubcategoria(value: string): value is TransSubcategoria {
+  return Object.prototype.hasOwnProperty.call(TRANS_SUBCATEGORIA_LABELS, value);
 }
 
 function normalizeMedicacaoFarmacoNome(nome: string) {
@@ -431,10 +509,10 @@ function isFarmacoPropofolInducao(farmacoId: number) {
   return normalizeMedicacaoFarmacoNome(farmaco.nome) === 'propofol';
 }
 
-function isFarmacoInalatorioInducao(farmacoId: number) {
+function isFarmacoInalatorio(farmacoId: number) {
   const farmaco = getFarmacoById(farmacoId);
   if (!farmaco?.nome) return false;
-  return FARMACOS_INDUCAO_INALATORIOS.has(normalizeMedicacaoFarmacoNome(farmaco.nome));
+  return FARMACOS_INALATORIOS.has(normalizeMedicacaoFarmacoNome(farmaco.nome));
 }
 
 function getDosesMgKgDoFarmaco(farmacoId: number) {
@@ -497,7 +575,7 @@ async function handleInducaoFarmacoChange(index: number) {
     return;
   }
 
-  if (isFarmacoInalatorioInducao(farmacoId)) {
+  if (isFarmacoInalatorio(farmacoId)) {
     return;
   }
 
@@ -507,6 +585,37 @@ async function handleInducaoFarmacoChange(index: number) {
       form.dose_livre = '5';
     }
   }
+}
+
+async function handleManutencaoFarmacoChange(index: number) {
+  await handleMedicacaoFarmacoSelection(getManutencaoBlockForm(index));
+}
+
+function handleManutencaoDoseChange(index: number) {
+  handleMedicacaoDoseSelection(getManutencaoBlockForm(index));
+}
+
+function handleManutencaoDoseInput(index: number) {
+  getManutencaoBlockForm(index).dose_livre_tocada = true;
+}
+
+function handleTransSubcategoriaChange(index: number) {
+  const form = getTransBlockForm(index);
+  medicacaoError.value = null;
+  form.farmaco_id = '';
+  resetMedicacaoDoseFields(form);
+}
+
+async function handleTransFarmacoChange(index: number) {
+  await handleMedicacaoFarmacoSelection(getTransBlockForm(index));
+}
+
+function handleTransDoseChange(index: number) {
+  handleMedicacaoDoseSelection(getTransBlockForm(index));
+}
+
+function handleTransDoseInput(index: number) {
+  getTransBlockForm(index).dose_livre_tocada = true;
 }
 
 function handleMedicacaoDoseSelection(form: MedicacaoBlockForm) {
@@ -541,7 +650,7 @@ function buildMedicacaoPayloadFromForm(
   config: { categoria: MedicacaoProntuarioCategoria; subcategoria: string; titulo: string; ordem?: number },
   options: {
     requireDose?: boolean;
-    unidadesOutraDose?: string[];
+    unidadesOutraDose?: string[] | ((farmacoId: number) => string[]);
   } = {},
 ): MedicacaoProntuarioPayload | null {
   const farmacoId = optionalId(form.farmaco_id);
@@ -572,9 +681,12 @@ function buildMedicacaoPayloadFromForm(
       throw new Error(`Dose livre invalida para ${config.titulo}.`);
     }
 
+    const unidadesOutraDose = typeof options.unidadesOutraDose === 'function'
+      ? options.unidadesOutraDose(farmacoId)
+      : options.unidadesOutraDose || [];
     const unidadeLivre = textValue(form.unidade_livre);
-    const unidadeValida = (options.unidadesOutraDose || []).includes(unidadeLivre);
-    if ((options.unidadesOutraDose || []).length === 0) {
+    const unidadeValida = unidadesOutraDose.includes(unidadeLivre);
+    if (unidadesOutraDose.length === 0) {
       throw new Error(`Nao ha unidades cadastradas para dose livre em ${config.titulo}.`);
     }
     if (!unidadeValida) {
@@ -608,6 +720,25 @@ function buildMedicacaoPayloadFromForm(
   return payload;
 }
 
+function getUnidadesOutraDoseDoFarmaco(farmacoId: number) {
+  const farmaco = getFarmacoById(farmacoId);
+  if (!farmaco) return [];
+
+  const unidades = new Set<string>();
+
+  getDosesDoFarmaco(farmacoId).forEach((dose) => {
+    const unidade = textValue(dose.unidade);
+    if (unidade) unidades.add(unidade);
+  });
+
+  const unidadePadrao = textValue(farmaco.unidade_padrao);
+  if (unidadePadrao) {
+    unidades.add(unidadePadrao);
+  }
+
+  return Array.from(unidades);
+}
+
 function buildInducaoPayloadFromForm(form: MedicacaoBlockForm): MedicacaoProntuarioPayload | null {
   const farmacoId = optionalId(form.farmaco_id);
   if (farmacoId === null) return null;
@@ -623,7 +754,7 @@ function buildInducaoPayloadFromForm(form: MedicacaoBlockForm): MedicacaoProntua
     payload.motivo_uso = motivoUso;
   }
 
-  if (isFarmacoInalatorioInducao(farmacoId)) {
+  if (isFarmacoInalatorio(farmacoId)) {
     payload.dose_selecionada = null;
     payload.dose_digitada = null;
     payload.unidade = null;
@@ -659,6 +790,39 @@ function buildInducaoPayloadFromForm(form: MedicacaoBlockForm): MedicacaoProntua
   }
 
   return payload;
+}
+
+function buildManutencaoPayloadFromForm(form: MedicacaoBlockForm): MedicacaoProntuarioPayload | null {
+  return buildMedicacaoPayloadFromForm(
+    form,
+    {
+      categoria: MANUTENCAO_CONFIG.categoria,
+      subcategoria: MANUTENCAO_CONFIG.subcategoria,
+      titulo: MANUTENCAO_CONFIG.titulo,
+    },
+    {
+      unidadesOutraDose: getUnidadesOutraDoseDoFarmaco,
+    },
+  );
+}
+
+function buildTransPayloadFromForm(form: MedicacaoBlockForm): MedicacaoProntuarioPayload | null {
+  const subcategoria = textValue(form.subcategoria);
+  if (!subcategoria || !isTransSubcategoria(subcategoria)) {
+    return null;
+  }
+
+  return buildMedicacaoPayloadFromForm(
+    form,
+    {
+      categoria: TRANS_CONFIG.categoria,
+      subcategoria,
+      titulo: TRANS_CONFIG.titulo,
+    },
+    {
+      unidadesOutraDose: getUnidadesOutraDoseDoFarmaco,
+    },
+  );
 }
 
 function aplicarPrimeiraLinhaInducaoPadrao() {
@@ -703,6 +867,48 @@ function prepararMedicacoesInducaoPayloads() {
     if (payload) {
       payloads.push({
         linha: index + 1,
+        payload: {
+          ...payload,
+          ordem: payloads.length + 1,
+        },
+      });
+    }
+  });
+
+  return payloads;
+}
+
+function prepararMedicacoesManutencaoPayloads() {
+  const payloads: Array<{ linha: number; payload: MedicacaoProntuarioPayload }> = [];
+
+  medicacaoManutencaoForm.linhas.forEach((form, index) => {
+    const payload = buildManutencaoPayloadFromForm(form);
+
+    if (payload) {
+      payloads.push({
+        linha: index + 1,
+        payload: {
+          ...payload,
+          ordem: payloads.length + 1,
+        },
+      });
+    }
+  });
+
+  return payloads;
+}
+
+function prepararMedicacoesTransPayloads() {
+  const payloads: Array<{ linha: number; subcategoria: TransSubcategoria; payload: MedicacaoProntuarioPayload }> = [];
+
+  medicacaoTransForm.linhas.forEach((form, index) => {
+    const payload = buildTransPayloadFromForm(form);
+    const subcategoria = textValue(form.subcategoria);
+
+    if (payload && isTransSubcategoria(subcategoria)) {
+      payloads.push({
+        linha: index + 1,
+        subcategoria,
         payload: {
           ...payload,
           ordem: payloads.length + 1,
@@ -789,34 +995,53 @@ async function loadMedicacaoOptions() {
   medicacaoError.value = null;
 
   try {
-    const resultados = await Promise.allSettled([
-      listarFarmacosPorCategoria(MPA_CONFIG.sedativo.subcategoria),
-      listarFarmacosPorCategoria(MPA_CONFIG.opioide.subcategoria),
-      listarFarmacosPorCategoria(INDUCAO_CONFIG.subcategoria),
-    ]);
+    const consultas = [
+      { titulo: MPA_CONFIG.sedativo.titulo, promise: listarFarmacosPorCategoria(MPA_CONFIG.sedativo.subcategoria) },
+      { titulo: MPA_CONFIG.opioide.titulo, promise: listarFarmacosPorCategoria(MPA_CONFIG.opioide.subcategoria) },
+      { titulo: INDUCAO_CONFIG.titulo, promise: listarFarmacosPorCategoria(INDUCAO_CONFIG.subcategoria) },
+      { titulo: MANUTENCAO_CONFIG.titulo, promise: listarFarmacosPorCategoria(MANUTENCAO_CONFIG.subcategoria) },
+      ...TRANS_SUBCATEGORIAS.map((item) => ({
+        titulo: item.label,
+        promise: listarFarmacosPorCategoria(item.value),
+        subcategoria: item.value,
+      })),
+    ];
+    const resultados = await Promise.allSettled(consultas.map((item) => item.promise));
 
     const erros: string[] = [];
 
-    if (resultados[0].status === 'fulfilled') {
-      farmacosSedativo.value = resultados[0].value;
-    } else {
-      farmacosSedativo.value = [];
-      erros.push(`${MPA_CONFIG.sedativo.titulo}: ${getErrorMessage(resultados[0].reason, 'nao foi possivel carregar.')}`);
-    }
+    resultados.forEach((resultado, index) => {
+      const consulta = consultas[index];
 
-    if (resultados[1].status === 'fulfilled') {
-      farmacosOpioide.value = resultados[1].value;
-    } else {
-      farmacosOpioide.value = [];
-      erros.push(`${MPA_CONFIG.opioide.titulo}: ${getErrorMessage(resultados[1].reason, 'nao foi possivel carregar.')}`);
-    }
+      if (resultado.status === 'fulfilled') {
+        if (index === 0) {
+          farmacosSedativo.value = resultado.value;
+        } else if (index === 1) {
+          farmacosOpioide.value = resultado.value;
+        } else if (index === 2) {
+          farmacosInducao.value = resultado.value;
+        } else if (index === 3) {
+          farmacosManutencao.value = resultado.value;
+        } else if ('subcategoria' in consulta) {
+          farmacosTransPorSubcategoria[consulta.subcategoria] = resultado.value;
+        }
+        return;
+      }
 
-    if (resultados[2].status === 'fulfilled') {
-      farmacosInducao.value = resultados[2].value;
-    } else {
-      farmacosInducao.value = [];
-      erros.push(`${INDUCAO_CONFIG.titulo}: ${getErrorMessage(resultados[2].reason, 'nao foi possivel carregar.')}`);
-    }
+      if (index === 0) {
+        farmacosSedativo.value = [];
+      } else if (index === 1) {
+        farmacosOpioide.value = [];
+      } else if (index === 2) {
+        farmacosInducao.value = [];
+      } else if (index === 3) {
+        farmacosManutencao.value = [];
+      } else if ('subcategoria' in consulta) {
+        farmacosTransPorSubcategoria[consulta.subcategoria] = [];
+      }
+
+      erros.push(`${consulta.titulo}: ${getErrorMessage(resultado.reason, 'nao foi possivel carregar.')}`);
+    });
 
     if (erros.length > 0) {
       medicacaoError.value = `Nao foi possivel carregar alguns catalogos de medicacao: ${erros.join(' | ')}`;
@@ -973,6 +1198,8 @@ async function submit() {
   try {
     const medicacoesMpaPayloads = prepararMedicacoesMpaPayloads();
     const medicacoesInducaoPayloads = prepararMedicacoesInducaoPayloads();
+    const medicacoesManutencaoPayloads = prepararMedicacoesManutencaoPayloads();
+    const medicacoesTransPayloads = prepararMedicacoesTransPayloads();
 
     medicacoesPayloads = [
       ...medicacoesMpaPayloads.map((item) => ({
@@ -981,6 +1208,14 @@ async function submit() {
       })),
       ...medicacoesInducaoPayloads.map((item) => ({
         rotulo: `Inducao ${item.linha}`,
+        payload: item.payload,
+      })),
+      ...medicacoesManutencaoPayloads.map((item) => ({
+        rotulo: `${MANUTENCAO_CONFIG.titulo} ${item.linha}`,
+        payload: item.payload,
+      })),
+      ...medicacoesTransPayloads.map((item) => ({
+        rotulo: `${TRANS_CONFIG.titulo} ${TRANS_SUBCATEGORIA_LABELS[item.subcategoria]} ${item.linha}`,
         payload: item.payload,
       })),
     ];
@@ -1036,6 +1271,24 @@ function adicionarLinhaInducao() {
 function removerLinhaInducao(index: number) {
   if (medicacaoInducaoForm.linhas.length <= 1) return;
   medicacaoInducaoForm.linhas.splice(index, 1);
+}
+
+function adicionarLinhaManutencao() {
+  medicacaoManutencaoForm.linhas.push(createMedicacaoBlockForm());
+}
+
+function removerLinhaManutencao(index: number) {
+  if (medicacaoManutencaoForm.linhas.length <= 1) return;
+  medicacaoManutencaoForm.linhas.splice(index, 1);
+}
+
+function adicionarLinhaTrans() {
+  medicacaoTransForm.linhas.push(createMedicacaoBlockForm());
+}
+
+function removerLinhaTrans(index: number) {
+  if (medicacaoTransForm.linhas.length <= 1) return;
+  medicacaoTransForm.linhas.splice(index, 1);
 }
 
 onMounted(() => {
@@ -1181,81 +1434,6 @@ onMounted(() => {
             <span>Observacoes pre-anestesicas</span>
             <textarea v-model="form.observacoes_pre_anestesicas" rows="4" />
           </label>
-        </div>
-      </section>
-
-      <section class="section-block form-section">
-        <div class="section-heading">
-          <h2>Fluidoterapia</h2>
-        </div>
-
-        <div class="form-grid">
-          <label class="field">
-            <span>Fluido principal</span>
-            <select v-model="fluidoterapiaForm.fluido" required>
-              <option v-for="item in FLUIDOS_FLUIDOTERAPIA" :key="item.value" :value="item.value">
-                {{ item.label }}
-              </option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Taxa ml/kg/h</span>
-            <input
-              v-model="fluidoterapiaForm.taxa_ml_kg_h"
-              autocomplete="off"
-              inputmode="decimal"
-              min="0"
-              step="0.1"
-              type="number"
-            />
-          </label>
-
-          <label class="field">
-            <span>Cateter utilizado</span>
-            <select v-model="fluidoterapiaForm.cateter_utilizado">
-              <option value="">Selecione</option>
-              <option v-for="item in CATETERES_FLUIDOTERAPIA" :key="item.value" :value="item.value">
-                {{ item.label }}
-              </option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Membro canulado</span>
-            <select v-model="fluidoterapiaForm.membro_canulado">
-              <option value="">Selecione</option>
-              <option v-for="item in MEMBROS_CANULADOS" :key="item.value" :value="item.value">
-                {{ item.label }}
-              </option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Teve desafio hidrico?</span>
-            <select v-model="fluidoterapiaForm.desafio_hidrico_realizado">
-              <option value="0">Nao</option>
-              <option value="1">Sim</option>
-            </select>
-          </label>
-
-          <div v-if="fluidoterapiaForm.desafio_hidrico_realizado === '1'" class="mini-card field-wide">
-            <strong>Desafio hidrico / prova de carga</strong>
-            <p class="form-note">10 ml/kg em 15 minutos.</p>
-
-            <div class="form-grid">
-              <label class="field">
-                <span>Quantidade</span>
-                <select v-model="fluidoterapiaForm.desafio_quantidade">
-                  <option v-for="item in DESAFIO_QUANTIDADE_OPCOES" :key="item.value" :value="item.value">
-                    {{ item.label }}
-                  </option>
-                </select>
-              </label>
-
-              <p class="form-note field-wide">Motivo padrao: Hipotensao por hipovolemia.</p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -1477,7 +1655,7 @@ onMounted(() => {
                 </small>
               </label>
 
-              <template v-if="isFarmacoInalatorioInducao(optionalId(linha.farmaco_id) || 0)">
+              <template v-if="isFarmacoInalatorio(optionalId(linha.farmaco_id) || 0)">
                 <p class="form-note field-wide">Via inalatória</p>
               </template>
 
@@ -1535,6 +1713,334 @@ onMounted(() => {
               </label>
             </div>
           </article>
+        </div>
+      </section>
+
+      <section class="section-block form-section">
+        <div class="section-heading">
+          <h2>Manutencao</h2>
+          <button class="secondary-action" type="button" :disabled="loadingMedicacaoOptions" @click="adicionarLinhaManutencao">
+            + Adicionar item
+          </button>
+        </div>
+
+        <p v-if="loadingMedicacaoOptions" class="state-text">Carregando catalogos de medicacao...</p>
+        <p v-else-if="getMedicacaoFarmacos('manutencao').length === 0" class="state-text">
+          Nenhum farmaco ativo nesta categoria.
+        </p>
+        <p v-else class="state-text">Selecione um ou mais itens de manutencao.</p>
+
+        <div class="form-grid">
+          <article
+            v-for="(linha, index) in medicacaoManutencaoForm.linhas"
+            :key="linha.id"
+            class="mini-card field-wide"
+          >
+            <div class="section-heading">
+              <h3>Item {{ index + 1 }}</h3>
+              <button
+                class="secondary-action"
+                type="button"
+                :disabled="medicacaoManutencaoForm.linhas.length <= 1"
+                @click="removerLinhaManutencao(index)"
+              >
+                Remover
+              </button>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Farmaco</span>
+                <select
+                  v-model="linha.farmaco_id"
+                  :disabled="loadingMedicacaoOptions || getMedicacaoFarmacos('manutencao').length === 0"
+                  @change="void handleManutencaoFarmacoChange(index)"
+                >
+                  <option value="">Nao informar</option>
+                  <option v-for="farmaco in getMedicacaoFarmacos('manutencao')" :key="farmaco.id" :value="String(farmaco.id)">
+                    {{ farmaco.nome }}
+                  </option>
+                </select>
+                <small v-if="!loadingMedicacaoOptions && getMedicacaoFarmacos('manutencao').length === 0">
+                  Nenhum farmaco ativo nesta categoria.
+                </small>
+              </label>
+
+              <template v-if="isFarmacoInalatorio(optionalId(linha.farmaco_id) || 0)">
+                <p class="form-note field-wide">Via inalatória</p>
+              </template>
+
+              <template v-else>
+                <label class="field">
+                  <span>Dose/taxa pre-definida</span>
+                  <select
+                    v-model="linha.dose_id"
+                    :disabled="loadingMedicacaoOptions || !linha.farmaco_id"
+                    @change="handleManutencaoDoseChange(index)"
+                  >
+                    <option value="">Nao informar</option>
+                    <option
+                      v-for="dose in getDosesDoFarmaco(optionalId(linha.farmaco_id) || 0)"
+                      :key="dose.id"
+                      :value="String(dose.id)"
+                    >
+                      {{ getDoseSelecionadaLabel(dose) }}
+                    </option>
+                    <option
+                      :disabled="getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0).length === 0"
+                      value="outra"
+                    >
+                      Outra dose/taxa
+                    </option>
+                  </select>
+                  <small v-if="linha.farmaco_id && !getDosesDoFarmaco(optionalId(linha.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
+                    Sem doses/taxas pre-definidas para este farmaco.
+                  </small>
+                  <small v-else-if="dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
+                    Carregando doses...
+                  </small>
+                  <small v-if="linha.dose_id === 'outra' && getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0).length === 0">
+                    Nao ha unidade segura para outra dose/taxa.
+                  </small>
+                </label>
+
+                <template v-if="linha.dose_id === 'outra' && getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0).length > 0">
+                  <label class="field">
+                    <span>Dose digitada</span>
+                    <input
+                      v-model="linha.dose_livre"
+                      :disabled="loadingMedicacaoOptions"
+                      autocomplete="off"
+                      inputmode="decimal"
+                      min="0"
+                      step="0.001"
+                      @input="handleManutencaoDoseInput(index)"
+                      type="number"
+                    />
+                  </label>
+
+                  <label class="field">
+                    <span>Unidade</span>
+                    <select v-model="linha.unidade_livre" :disabled="loadingMedicacaoOptions">
+                      <option value="">Selecione</option>
+                      <option
+                        v-for="item in getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0)"
+                        :key="item"
+                        :value="item"
+                      >
+                        {{ item }}
+                      </option>
+                    </select>
+                  </label>
+                </template>
+              </template>
+
+              <label class="field field-wide">
+                <span>Motivo de uso</span>
+                <input v-model="linha.motivo_uso" autocomplete="off" type="text" />
+              </label>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block form-section">
+        <div class="section-heading">
+          <h2>Medicacoes trans-anestesicas</h2>
+          <button class="secondary-action" type="button" :disabled="loadingMedicacaoOptions" @click="adicionarLinhaTrans">
+            + Adicionar medicacao
+          </button>
+        </div>
+
+        <p v-if="loadingMedicacaoOptions" class="state-text">Carregando catalogos de medicacao...</p>
+        <p v-else class="state-text">Selecione subcategoria, farmaco, dose/taxa e motivo quando necessario.</p>
+
+        <div class="form-grid">
+          <article v-for="(linha, index) in medicacaoTransForm.linhas" :key="linha.id" class="mini-card field-wide">
+            <div class="section-heading">
+              <h3>Medicacao {{ index + 1 }}</h3>
+              <button
+                class="secondary-action"
+                type="button"
+                :disabled="medicacaoTransForm.linhas.length <= 1"
+                @click="removerLinhaTrans(index)"
+              >
+                Remover
+              </button>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Subcategoria</span>
+                <select v-model="linha.subcategoria" :disabled="loadingMedicacaoOptions" @change="handleTransSubcategoriaChange(index)">
+                  <option value="">Selecione</option>
+                  <option v-for="item in TRANS_SUBCATEGORIAS" :key="item.value" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Farmaco</span>
+                <select
+                  v-model="linha.farmaco_id"
+                  :disabled="loadingMedicacaoOptions || !linha.subcategoria || getMedicacaoTransFarmacos(linha.subcategoria).length === 0"
+                  @change="void handleTransFarmacoChange(index)"
+                >
+                  <option value="">Nao informar</option>
+                  <option v-for="farmaco in getMedicacaoTransFarmacos(linha.subcategoria)" :key="farmaco.id" :value="String(farmaco.id)">
+                    {{ farmaco.nome }}
+                  </option>
+                </select>
+                <small v-if="linha.subcategoria && !loadingMedicacaoOptions && getMedicacaoTransFarmacos(linha.subcategoria).length === 0">
+                  Nenhum farmaco ativo nesta subcategoria.
+                </small>
+              </label>
+
+              <label class="field">
+                <span>Dose/taxa pre-definida</span>
+                <select
+                  v-model="linha.dose_id"
+                  :disabled="loadingMedicacaoOptions || !linha.farmaco_id"
+                  @change="handleTransDoseChange(index)"
+                >
+                  <option value="">Nao informar</option>
+                  <option
+                    v-for="dose in getDosesDoFarmaco(optionalId(linha.farmaco_id) || 0)"
+                    :key="dose.id"
+                    :value="String(dose.id)"
+                  >
+                    {{ getDoseSelecionadaLabel(dose) }}
+                  </option>
+                  <option
+                    :disabled="getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0).length === 0"
+                    value="outra"
+                  >
+                    Outra dose/taxa
+                  </option>
+                </select>
+                <small v-if="linha.farmaco_id && !getDosesDoFarmaco(optionalId(linha.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
+                  Sem doses/taxas pre-definidas para este farmaco.
+                </small>
+                <small v-else-if="dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
+                  Carregando doses...
+                </small>
+                <small v-if="linha.dose_id === 'outra' && getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0).length === 0">
+                  Nao ha unidade segura para outra dose/taxa.
+                </small>
+              </label>
+
+              <template v-if="linha.dose_id === 'outra' && getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0).length > 0">
+                <label class="field">
+                  <span>Dose digitada</span>
+                  <input
+                    v-model="linha.dose_livre"
+                    :disabled="loadingMedicacaoOptions"
+                    autocomplete="off"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.001"
+                    @input="handleTransDoseInput(index)"
+                    type="number"
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Unidade</span>
+                  <select v-model="linha.unidade_livre" :disabled="loadingMedicacaoOptions">
+                    <option value="">Selecione</option>
+                    <option
+                      v-for="item in getUnidadesOutraDoseDoFarmaco(optionalId(linha.farmaco_id) || 0)"
+                      :key="item"
+                      :value="item"
+                    >
+                      {{ item }}
+                    </option>
+                  </select>
+                </label>
+              </template>
+
+              <label class="field field-wide">
+                <span>Motivo de uso</span>
+                <input v-model="linha.motivo_uso" autocomplete="off" type="text" />
+              </label>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block form-section">
+        <div class="section-heading">
+          <h2>Fluidoterapia</h2>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Fluido principal</span>
+            <select v-model="fluidoterapiaForm.fluido" required>
+              <option v-for="item in FLUIDOS_FLUIDOTERAPIA" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Taxa ml/kg/h</span>
+            <input
+              v-model="fluidoterapiaForm.taxa_ml_kg_h"
+              autocomplete="off"
+              inputmode="decimal"
+              min="0"
+              step="0.1"
+              type="number"
+            />
+          </label>
+
+          <label class="field">
+            <span>Cateter utilizado</span>
+            <select v-model="fluidoterapiaForm.cateter_utilizado">
+              <option value="">Selecione</option>
+              <option v-for="item in CATETERES_FLUIDOTERAPIA" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Membro canulado</span>
+            <select v-model="fluidoterapiaForm.membro_canulado">
+              <option value="">Selecione</option>
+              <option v-for="item in MEMBROS_CANULADOS" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Teve desafio hidrico?</span>
+            <select v-model="fluidoterapiaForm.desafio_hidrico_realizado">
+              <option value="0">Nao</option>
+              <option value="1">Sim</option>
+            </select>
+          </label>
+
+          <div v-if="fluidoterapiaForm.desafio_hidrico_realizado === '1'" class="mini-card field-wide">
+            <strong>Desafio hidrico / prova de carga</strong>
+            <p class="form-note">10 ml/kg em 15 minutos.</p>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Quantidade</span>
+                <select v-model="fluidoterapiaForm.desafio_quantidade">
+                  <option v-for="item in DESAFIO_QUANTIDADE_OPCOES" :key="item.value" :value="item.value">
+                    {{ item.label }}
+                  </option>
+                </select>
+              </label>
+
+              <p class="form-note field-wide">Motivo padrao: Hipotensao por hipovolemia.</p>
+            </div>
+          </div>
         </div>
       </section>
 
