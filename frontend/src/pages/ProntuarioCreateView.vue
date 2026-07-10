@@ -17,6 +17,7 @@ import type {
   MembroCanuladoFluidoterapia,
   Profissional,
   ProntuarioAnestesico,
+  MedicacaoProntuarioCategoria,
 } from '../types/api';
 
 const RACAS = [
