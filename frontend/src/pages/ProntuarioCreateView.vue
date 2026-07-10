@@ -239,6 +239,8 @@ const INDUCAO_CONFIG = {
 };
 
 const MAX_LINHAS_INDUCAO = 5;
+const UNIDADE_INDUCAO_MG_KG = 'mg/kg';
+const FARMACOS_INDUCAO_INALATORIOS = new Set(['isoflurano', 'sevoflurano']);
 
 const UNIDADES_MPA_OUTRA_DOSE = [
   { value: 'mg/kg', label: 'mg/kg' },
@@ -408,20 +410,22 @@ function getFarmacoById(farmacoId: number) {
   return todos.find((farmaco) => farmaco.id === farmacoId) || null;
 }
 
-function getUnidadesDoFarmaco(farmacoId: number) {
+function normalizeMedicacaoFarmacoNome(nome: string) {
+  return String(nome)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isFarmacoInalatorioInducao(farmacoId: number) {
   const farmaco = getFarmacoById(farmacoId);
-  const unidades = new Set<string>();
+  if (!farmaco?.nome) return false;
+  return FARMACOS_INDUCAO_INALATORIOS.has(normalizeMedicacaoFarmacoNome(farmaco.nome));
+}
 
-  if (farmaco?.unidade_padrao) {
-    unidades.add(String(farmaco.unidade_padrao));
-  }
-
-  for (const dose of getDosesDoFarmaco(farmacoId)) {
-    const unidade = textValue(dose.unidade);
-    if (unidade) unidades.add(unidade);
-  }
-
-  return Array.from(unidades);
+function getDosesMgKgDoFarmaco(farmacoId: number) {
+  return getDosesDoFarmaco(farmacoId).filter((dose) => normalizeMedicacaoFarmacoNome(dose.unidade) === UNIDADE_INDUCAO_MG_KG);
 }
 
 async function ensureDosesForFarmaco(farmacoId: number) {
@@ -561,6 +565,59 @@ function buildMedicacaoPayloadFromForm(
   return payload;
 }
 
+function buildInducaoPayloadFromForm(form: MedicacaoBlockForm): MedicacaoProntuarioPayload | null {
+  const farmacoId = optionalId(form.farmaco_id);
+  if (farmacoId === null) return null;
+
+  const payload: MedicacaoProntuarioPayload = {
+    categoria: INDUCAO_CONFIG.categoria,
+    subcategoria: INDUCAO_CONFIG.subcategoria,
+    farmaco_id: farmacoId,
+  };
+
+  const motivoUso = trimmed(form.motivo_uso);
+  if (motivoUso !== null) {
+    payload.motivo_uso = motivoUso;
+  }
+
+  if (isFarmacoInalatorioInducao(farmacoId)) {
+    payload.dose_selecionada = null;
+    payload.dose_digitada = null;
+    payload.unidade = null;
+    return payload;
+  }
+
+  const dosesMgKg = getDosesMgKgDoFarmaco(farmacoId);
+  const doseId = textValue(form.dose_id);
+
+  if (isMedicacaoDoseOutraSelecionada(doseId)) {
+    const doseLivre = parseOptionalNumber(form.dose_livre);
+    if (doseLivre === null || doseLivre <= 0) {
+      throw new Error(`Dose livre invalida para ${INDUCAO_CONFIG.titulo}.`);
+    }
+
+    payload.dose_selecionada = null;
+    payload.dose_digitada = doseLivre;
+    payload.unidade = UNIDADE_INDUCAO_MG_KG;
+    return payload;
+  }
+
+  const doseIdNumerico = optionalId(doseId);
+  if (doseIdNumerico !== null) {
+    const dose = dosesMgKg.find((item) => item.id === doseIdNumerico);
+    if (!dose) {
+      throw new Error(`Dose pre-definida invalida para ${INDUCAO_CONFIG.titulo}.`);
+    }
+
+    payload.dose_selecionada = dose.rotulo;
+    payload.dose_digitada = null;
+    payload.unidade = UNIDADE_INDUCAO_MG_KG;
+    return payload;
+  }
+
+  return payload;
+}
+
 function prepararMedicacoesMpaPayloads() {
   const payloads: Array<{ chave: keyof typeof MPA_CONFIG; payload: MedicacaoProntuarioPayload }> = [];
 
@@ -581,10 +638,7 @@ function prepararMedicacoesInducaoPayloads() {
   const payloads: Array<{ linha: number; payload: MedicacaoProntuarioPayload }> = [];
 
   medicacaoInducaoForm.linhas.forEach((form, index) => {
-    const payload = buildMedicacaoPayloadFromForm(form, INDUCAO_CONFIG, {
-      requireDose: true,
-      unidadesOutraDose: getUnidadesDoFarmaco(optionalId(form.farmaco_id) || 0),
-    });
+    const payload = buildInducaoPayloadFromForm(form);
 
     if (payload) {
       payloads.push({
@@ -1361,63 +1415,55 @@ onMounted(() => {
                 </small>
               </label>
 
-              <label class="field">
-                <span>Dose pre-definida</span>
-                <select
-                  v-model="linha.dose_id"
-                  :disabled="loadingMedicacaoOptions || !linha.farmaco_id"
-                  @change="handleInducaoDoseChange(index)"
-                >
-                  <option value="">Nao informar</option>
-                  <option
-                    v-for="dose in getDosesDoFarmaco(optionalId(linha.farmaco_id) || 0)"
-                    :key="dose.id"
-                    :value="String(dose.id)"
-                  >
-                    {{ getDoseSelecionadaLabel(dose) }}
-                  </option>
-                  <option value="outra">Outra dose</option>
-                </select>
-                <small v-if="linha.farmaco_id && !getDosesDoFarmaco(optionalId(linha.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
-                  Sem doses pre-definidas para este farmaco.
-                </small>
-                <small v-else-if="dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
-                  Carregando doses...
-                </small>
-                <small v-if="linha.dose_id === 'outra'">
-                  Selecione uma unidade real do catalogo para esta dose.
-                </small>
-              </label>
+              <template v-if="isFarmacoInalatorioInducao(optionalId(linha.farmaco_id) || 0)">
+                <p class="form-note field-wide">Via inalatória</p>
+              </template>
 
-              <template v-if="linha.dose_id === 'outra'">
+              <template v-else>
                 <label class="field">
-                  <span>Dose digitada</span>
-                  <input
-                    v-model="linha.dose_livre"
-                    :disabled="loadingMedicacaoOptions"
-                    autocomplete="off"
-                    inputmode="decimal"
-                    min="0"
-                    step="0.001"
-                    type="number"
-                  />
-                </label>
-
-                <label class="field">
-                  <span>Unidade</span>
+                  <span>Dose pre-definida</span>
                   <select
-                    v-model="linha.unidade_livre"
-                    :disabled="loadingMedicacaoOptions || getUnidadesDoFarmaco(optionalId(linha.farmaco_id) || 0).length === 0"
+                    v-model="linha.dose_id"
+                    :disabled="loadingMedicacaoOptions || !linha.farmaco_id"
+                    @change="handleInducaoDoseChange(index)"
                   >
-                    <option value="">Selecione</option>
-                    <option v-for="item in getUnidadesDoFarmaco(optionalId(linha.farmaco_id) || 0)" :key="item" :value="item">
-                      {{ item }}
+                    <option value="">Nao informar</option>
+                    <option
+                      v-for="dose in getDosesMgKgDoFarmaco(optionalId(linha.farmaco_id) || 0)"
+                      :key="dose.id"
+                      :value="String(dose.id)"
+                    >
+                      {{ getDoseSelecionadaLabel(dose) }}
                     </option>
+                    <option value="outra">Outra dose</option>
                   </select>
-                  <small v-if="getUnidadesDoFarmaco(optionalId(linha.farmaco_id) || 0).length === 0">
-                    Nenhuma unidade cadastrada para este farmaco.
+                  <small v-if="linha.farmaco_id && !getDosesMgKgDoFarmaco(optionalId(linha.farmaco_id) || 0).length && !dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
+                    Sem doses pre-definidas em mg/kg para este farmaco.
+                  </small>
+                  <small v-else-if="dosesLoadingPorFarmaco[optionalId(linha.farmaco_id) || 0]">
+                    Carregando doses...
+                  </small>
+                  <small v-if="linha.dose_id === 'outra'">
+                    Dose livre em mg/kg.
                   </small>
                 </label>
+
+                <template v-if="linha.dose_id === 'outra'">
+                  <label class="field">
+                    <span>Dose digitada</span>
+                    <input
+                      v-model="linha.dose_livre"
+                      :disabled="loadingMedicacaoOptions"
+                      autocomplete="off"
+                      inputmode="decimal"
+                      min="0"
+                      step="0.001"
+                      type="number"
+                    />
+                  </label>
+
+                  <p class="form-note field-wide">mg/kg</p>
+                </template>
               </template>
 
               <label class="field field-wide">

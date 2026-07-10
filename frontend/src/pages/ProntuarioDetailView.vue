@@ -73,6 +73,8 @@ const FLUIDOTERAPIA_PADRAO = {
   desafio_motivo: 'Hipotensao por hipovolemia',
 };
 
+const FARMACOS_INDUCAO_INALATORIOS = new Set(['isoflurano', 'sevoflurano']);
+
 const prontuario = ref<ProntuarioAnestesico | null>(null);
 const loadingProntuario = ref(false);
 const errorProntuario = ref<string | null>(null);
@@ -192,6 +194,20 @@ function formatQuantidadeDesafio(value?: string | number | null) {
   if (parsed === 2) return '2 vezes';
   if (parsed === 3) return '3 vezes';
   return `${parsed} vezes`;
+}
+
+function normalizeMedicacaoFarmacoNome(nome: string) {
+  return String(nome)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isMedicacaoInducaoInalatoria(item: MedicacaoProntuario) {
+  if (item.categoria !== 'inducao') return false;
+  if (!item.farmaco_nome) return false;
+  return FARMACOS_INDUCAO_INALATORIOS.has(normalizeMedicacaoFarmacoNome(item.farmaco_nome));
 }
 
 function temDesafioHidrico(item?: FluidoterapiaProntuario | null) {
@@ -349,6 +365,10 @@ async function submitFluidoterapia() {
 }
 
 function medicationDose(item: MedicacaoProntuario) {
+  if (isMedicacaoInducaoInalatoria(item)) {
+    return 'Via inalatória';
+  }
+
   const dose = item.dose_digitada || item.dose_selecionada;
   if (!dose && !item.unidade) return 'Nao informado';
   return [dose, item.unidade].filter(Boolean).join(' ');
