@@ -254,6 +254,7 @@ interface MedicacaoBlockForm {
   dose_livre: string;
   unidade_livre: string;
   motivo_uso: string;
+  dose_livre_tocada: boolean;
 }
 
 let proximoIdMedicacaoBlock = 1;
@@ -266,6 +267,7 @@ function createMedicacaoBlockForm(): MedicacaoBlockForm {
     dose_livre: '',
     unidade_livre: '',
     motivo_uso: '',
+    dose_livre_tocada: false,
   };
 }
 
@@ -418,6 +420,17 @@ function normalizeMedicacaoFarmacoNome(nome: string) {
     .trim();
 }
 
+function getFarmacoInducaoPorNome(nome: string) {
+  const nomeNormalizado = normalizeMedicacaoFarmacoNome(nome);
+  return farmacosInducao.value.find((farmaco) => normalizeMedicacaoFarmacoNome(farmaco.nome) === nomeNormalizado) || null;
+}
+
+function isFarmacoPropofolInducao(farmacoId: number) {
+  const farmaco = getFarmacoById(farmacoId);
+  if (!farmaco?.nome) return false;
+  return normalizeMedicacaoFarmacoNome(farmaco.nome) === 'propofol';
+}
+
 function isFarmacoInalatorioInducao(farmacoId: number) {
   const farmaco = getFarmacoById(farmacoId);
   if (!farmaco?.nome) return false;
@@ -447,6 +460,7 @@ function resetMedicacaoDoseFields(form: MedicacaoBlockForm) {
   form.dose_id = '';
   form.dose_livre = '';
   form.unidade_livre = '';
+  form.dose_livre_tocada = false;
 }
 
 async function handleMedicacaoFarmacoSelection(form: MedicacaoBlockForm) {
@@ -468,7 +482,31 @@ async function handleMedicacaoFarmacoChange(chave: keyof typeof MPA_CONFIG) {
 }
 
 async function handleInducaoFarmacoChange(index: number) {
-  await handleMedicacaoFarmacoSelection(getInducaoBlockForm(index));
+  const form = getInducaoBlockForm(index);
+  medicacaoError.value = null;
+
+  const farmacoId = optionalId(form.farmaco_id);
+  resetMedicacaoDoseFields(form);
+
+  if (farmacoId === null) return;
+
+  try {
+    await ensureDosesForFarmaco(farmacoId);
+  } catch (err) {
+    medicacaoError.value = getErrorMessage(err, 'Nao foi possivel carregar as doses do farmaco selecionado.');
+    return;
+  }
+
+  if (isFarmacoInalatorioInducao(farmacoId)) {
+    return;
+  }
+
+  if (isFarmacoPropofolInducao(farmacoId)) {
+    form.dose_id = 'outra';
+    if (!form.dose_livre_tocada) {
+      form.dose_livre = '5';
+    }
+  }
 }
 
 function handleMedicacaoDoseSelection(form: MedicacaoBlockForm) {
@@ -485,6 +523,11 @@ function handleMedicacaoDoseChangePorChave(chave: keyof typeof MPA_CONFIG) {
 
 function handleInducaoDoseChange(index: number) {
   handleMedicacaoDoseSelection(getInducaoBlockForm(index));
+}
+
+function handleInducaoDoseInput(index: number) {
+  const form = getInducaoBlockForm(index);
+  form.dose_livre_tocada = true;
 }
 
 function getDoseSelecionadaLabel(dose?: DoseFarmaco | null) {
@@ -616,6 +659,23 @@ function buildInducaoPayloadFromForm(form: MedicacaoBlockForm): MedicacaoProntua
   }
 
   return payload;
+}
+
+function aplicarPrimeiraLinhaInducaoPadrao() {
+  const primeiraLinha = medicacaoInducaoForm.linhas[0];
+  if (!primeiraLinha) return;
+  if (textValue(primeiraLinha.farmaco_id) || textValue(primeiraLinha.dose_id) || textValue(primeiraLinha.dose_livre)) {
+    return;
+  }
+
+  const propofol = getFarmacoInducaoPorNome('Propofol');
+  if (!propofol) return;
+
+  primeiraLinha.farmaco_id = String(propofol.id);
+  primeiraLinha.dose_id = 'outra';
+  primeiraLinha.dose_livre = '5';
+  primeiraLinha.unidade_livre = '';
+  primeiraLinha.dose_livre_tocada = false;
 }
 
 function prepararMedicacoesMpaPayloads() {
@@ -761,6 +821,8 @@ async function loadMedicacaoOptions() {
     if (erros.length > 0) {
       medicacaoError.value = `Nao foi possivel carregar alguns catalogos de medicacao: ${erros.join(' | ')}`;
     }
+
+    aplicarPrimeiraLinhaInducaoPadrao();
   } catch (err) {
     medicacaoError.value = getErrorMessage(err, 'Nao foi possivel carregar os catalogos de medicacao.');
   } finally {
@@ -1451,16 +1513,17 @@ onMounted(() => {
                 <template v-if="linha.dose_id === 'outra'">
                   <label class="field">
                     <span>Dose digitada</span>
-                    <input
-                      v-model="linha.dose_livre"
-                      :disabled="loadingMedicacaoOptions"
-                      autocomplete="off"
-                      inputmode="decimal"
-                      min="0"
-                      step="0.001"
-                      type="number"
-                    />
-                  </label>
+                  <input
+                    v-model="linha.dose_livre"
+                    :disabled="loadingMedicacaoOptions"
+                    autocomplete="off"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.001"
+                    @input="handleInducaoDoseInput(index)"
+                    type="number"
+                  />
+                </label>
 
                   <p class="form-note field-wide">mg/kg</p>
                 </template>
