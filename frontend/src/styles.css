@@ -350,6 +350,120 @@ button {
   gap: 10px;
 }
 
+.monitor-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.monitor-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(24, 33, 31, 0.12);
+  border-radius: 7px;
+}
+
+.monitor-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.monitor-table th,
+.monitor-table td {
+  min-width: 94px;
+  padding: 8px;
+  border-bottom: 1px solid rgba(24, 33, 31, 0.1);
+  text-align: center;
+  vertical-align: top;
+}
+
+.monitor-table thead th {
+  color: #0f3f3b;
+  background: #edf8f6;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.monitor-table small {
+  display: block;
+  color: #66746f;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.monitor-table__time {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 82px !important;
+  color: #18211f;
+  background: #ffffff;
+  box-shadow: 2px 0 0 rgba(24, 33, 31, 0.06);
+}
+
+.monitor-table thead .monitor-table__time {
+  z-index: 3;
+  background: #edf8f6;
+}
+
+.monitor-table--editable td {
+  min-width: 126px;
+}
+
+.monitor-column-action,
+.monitor-row-action {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.monitor-column-action:disabled,
+.monitor-row-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.monitor-edit-cell {
+  display: grid;
+  grid-template-columns: auto minmax(58px, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.monitor-edit-cell input[type='number'] {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(24, 33, 31, 0.16);
+  border-radius: 5px;
+  padding: 4px 6px;
+  color: #18211f;
+  background: #ffffff;
+  font: inherit;
+  text-align: right;
+}
+
+.monitor-cell--invalid {
+  background: #fff1f0;
+}
+
+.monitor-cell--invalid small,
+.monitor-cell-warning {
+  color: #b42318 !important;
+  margin-top: 4px;
+}
+
+.monitor-row--conflict td,
+.monitor-row--conflict .monitor-table__time {
+  background: #fff4d6;
+}
+
 @media (min-width: 620px) {
   .app-shell {
     padding-inline: 24px;
@@ -597,5 +711,40 @@ button {
   .print-fluid-card {
     padding: 8px 10px;
     border-color: #b8c0bd;
+  }
+
+  .print-monitor-section,
+  .print-monitor-section .monitor-table-wrap,
+  .print-monitor-section .monitor-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-monitor-section .monitor-table-wrap {
+    overflow: visible;
+    border-color: #b8c0bd;
+  }
+
+  .print-monitor-section .monitor-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 0.58rem;
+  }
+
+  .print-monitor-section .monitor-table th,
+  .print-monitor-section .monitor-table td {
+    min-width: 0;
+    padding: 4px 2px;
+    overflow-wrap: anywhere;
+  }
+
+  .print-monitor-section .monitor-table__time {
+    position: static;
+    min-width: 0 !important;
+    box-shadow: none;
+  }
+
+  .print-monitor-section .monitor-table small {
+    font-size: 0.52rem;
   }
 }

@@ -225,12 +225,68 @@ export interface MonitorizacaoProntuario {
   prontuario_id: number;
   anexo_id?: number | null;
   dados_json?: string | Record<string, unknown> | null;
-  colunas_json?: string | string[] | null;
+  colunas_json?: string | MonitorizacaoColuna[] | null;
   status?: string | null;
   criado_em?: string | null;
   atualizado_em?: string | null;
+  anexo?: MonitorizacaoAnexo | null;
   anexo_nome_arquivo?: string | null;
   anexo_tipo_anexo?: string | null;
   anexo_mime_type?: string | null;
   anexo_tamanho_bytes?: number | null;
+}
+
+export type MonitorizacaoCampoClinico =
+  | 'fc_bpm'
+  | 'fr_rpm'
+  | 'spo2_percent'
+  | 'pressao_sis_mmhg'
+  | 'pressao_dias_mmhg'
+  | 'pressao_media_mmhg'
+  | 'etco2_mmhg'
+  | 'fico2_mmhg'
+  | 'gas_mmhg'
+  | 'temp1_c'
+  | 'temp2_c';
+
+export interface MonitorizacaoColuna {
+  key: MonitorizacaoCampoClinico;
+  label: string;
+  unidade: string;
+  origem: string;
+}
+
+export interface MonitorizacaoAnexo {
+  id?: number | null;
+  tipo_anexo?: string | null;
+  nome_arquivo?: string | null;
+  mime_type?: string | null;
+  tamanho_bytes?: number | null;
+}
+
+export interface MonitorizacaoLinha {
+  id: number;
+  prontuario_id: number;
+  monitorizacao_extraida_id: number;
+  data_medicao?: string | null;
+  horario?: string | null;
+  dados_json?: string | Partial<Record<MonitorizacaoCampoClinico, number>> | null;
+  ordem: number;
+}
+
+export interface MonitorizacaoConflito {
+  data_medicao: string;
+  horario: string;
+}
+
+export interface ImportarMonitorizacaoConfirmadaPayload {
+  formato: 'trend-table-v1';
+  parser_versao: 1;
+  colunas: MonitorizacaoColuna[];
+  linhas: Array<{
+    ordem: number;
+    data_medicao: string;
+    horario: string;
+    dados: Partial<Record<MonitorizacaoCampoClinico, number>>;
+  }>;
 }

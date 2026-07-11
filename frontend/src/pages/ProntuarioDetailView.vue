@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
 import InfoRow from '../components/InfoRow.vue';
+import MonitorizacaoTable from '../components/MonitorizacaoTable.vue';
 import ReadOnlySection from '../components/ReadOnlySection.vue';
 import {
   buscarProntuario,
   listarAnexos,
   listarFluidoterapias,
+  listarLinhasMonitorizacao,
   listarMedicacoes,
   listarMonitorizacoes,
 } from '../api/prontuarios';
@@ -14,6 +16,7 @@ import type {
   FluidoterapiaProntuario,
   MedicacaoProntuario,
   MonitorizacaoProntuario,
+  MonitorizacaoLinha,
   ProntuarioAnestesico,
 } from '../types/api';
 import { formatBoolean, formatBytes, formatDate, formatDateTime, formatValue } from '../utils/format';
@@ -26,6 +29,7 @@ const emit = defineEmits<{
   back: [];
   edit: [];
   print: [];
+  importMonitorizacao: [];
 }>();
 
 interface SectionState<T> {
@@ -74,6 +78,7 @@ const medicacoes = reactive<SectionState<MedicacaoProntuario>>({ data: [], loadi
 const fluidoterapias = reactive<SectionState<FluidoterapiaProntuario>>({ data: [], loading: false, error: null });
 const anexos = reactive<SectionState<AnexoProntuario>>({ data: [], loading: false, error: null });
 const monitorizacoes = reactive<SectionState<MonitorizacaoProntuario>>({ data: [], loading: false, error: null });
+const linhasMonitorizacao = reactive<Record<number, SectionState<MonitorizacaoLinha>>>({});
 
 function getErrorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -211,11 +216,54 @@ async function loadMonitorizacoes() {
   monitorizacoes.error = null;
   try {
     monitorizacoes.data = await listarMonitorizacoes(props.prontuarioId);
+    for (const chave of Object.keys(linhasMonitorizacao)) delete linhasMonitorizacao[Number(chave)];
+    await Promise.all(monitorizacoes.data
+      .filter((item) => item.status === 'revisado')
+      .map(async (item) => {
+        const estado: SectionState<MonitorizacaoLinha> = { data: [], loading: true, error: null };
+        linhasMonitorizacao[item.id] = estado;
+        try {
+          estado.data = await listarLinhasMonitorizacao(props.prontuarioId, item.id);
+        } catch (err) {
+          estado.error = getErrorMessage(err, 'Nao foi possivel carregar as linhas da monitorizacao.');
+        } finally {
+          estado.loading = false;
+        }
+      }));
   } catch (err) {
     monitorizacoes.error = getErrorMessage(err, 'Nao foi possivel carregar as monitorizacoes.');
   } finally {
     monitorizacoes.loading = false;
   }
+}
+
+function anexoMonitorizacao(item: MonitorizacaoProntuario) {
+  return item.anexo || {
+    id: item.anexo_id,
+    nome_arquivo: item.anexo_nome_arquivo,
+    tipo_anexo: item.anexo_tipo_anexo,
+    mime_type: item.anexo_mime_type,
+    tamanho_bytes: item.anexo_tamanho_bytes,
+  };
+}
+
+function origemMonitorizacao() {
+  return 'Trend Table';
+}
+
+function dataMonitorizacao(item: MonitorizacaoProntuario) {
+  const datas = [...new Set((linhasMonitorizacao[item.id]?.data || [])
+    .map((linha) => linha.data_medicao)
+    .filter((data): data is string => Boolean(data)))];
+  return datas.length ? datas.map(formatDate).join(', ') : 'Nao informado';
+}
+
+function statusMonitorizacao(status?: string | null) {
+  if (status === 'revisado') return 'Revisada';
+  if (status === 'pendente') return 'Pendente';
+  if (status === 'extraido') return 'Extraida';
+  if (status === 'erro') return 'Com erro';
+  return formatValue(status);
 }
 
 function reloadAll() {
@@ -255,6 +303,9 @@ onMounted(reloadAll);
         </button>
         <button class="secondary-action" type="button" :disabled="loadingProntuario || !prontuario" @click="emit('print')">
           Imprimir / Salvar PDF
+        </button>
+        <button class="secondary-action" type="button" :disabled="loadingProntuario || !prontuario" @click="emit('importMonitorizacao')">
+          Importar monitorizacao
         </button>
         <button class="primary-action" type="button" @click="reloadAll">Atualizar</button>
       </div>
@@ -406,14 +457,20 @@ onMounted(reloadAll);
         empty-text="Nenhuma monitorizacao registrada."
       >
         <article v-for="item in monitorizacoes.data" :key="item.id" class="mini-card">
-          <strong>{{ item.anexo_nome_arquivo || `Monitorizacao #${item.id}` }}</strong>
+          <strong>{{ anexoMonitorizacao(item).nome_arquivo || `Monitorizacao #${item.id}` }}</strong>
           <dl class="mini-grid">
-            <InfoRow label="Status" :value="item.status" />
-            <InfoRow label="Tipo do anexo" :value="item.anexo_tipo_anexo" />
-            <InfoRow label="Mime" :value="item.anexo_mime_type" />
-            <InfoRow label="Tamanho" :value="formatBytes(item.anexo_tamanho_bytes)" />
+            <InfoRow label="Origem" :value="origemMonitorizacao()" />
+            <InfoRow label="Data" :value="dataMonitorizacao(item)" />
+            <InfoRow label="Status" :value="statusMonitorizacao(item.status)" />
+            <InfoRow label="Quantidade de linhas" :value="linhasMonitorizacao[item.id]?.data.length ?? 0" />
             <InfoRow label="Criada em" :value="formatDateTime(item.criado_em)" />
           </dl>
+          <p v-if="linhasMonitorizacao[item.id]?.loading" class="state-text">Carregando medicoes...</p>
+          <p v-else-if="linhasMonitorizacao[item.id]?.error" class="state-error">{{ linhasMonitorizacao[item.id]?.error }}</p>
+          <MonitorizacaoTable
+            v-else-if="item.status === 'revisado' && linhasMonitorizacao[item.id]?.data.length"
+            :linhas="linhasMonitorizacao[item.id]?.data || []"
+          />
         </article>
       </ReadOnlySection>
     </section>

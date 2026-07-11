@@ -1,13 +1,15 @@
-import { apiDelete, apiGet, apiPost, apiPut } from './client';
+import { apiDelete, apiGet, apiPost, apiPostForm, apiPut } from './client';
 import type {
   AnexoProntuario,
   AtualizarProntuarioPayload,
   CriarProntuarioPayload,
   FluidoterapiaProntuario,
   FluidoterapiaProntuarioPayload,
+  ImportarMonitorizacaoConfirmadaPayload,
   MedicacaoProntuario,
   MedicacaoProntuarioPayload,
   MonitorizacaoProntuario,
+  MonitorizacaoLinha,
   ProntuarioAnestesico,
 } from '../types/api';
 
@@ -93,4 +95,32 @@ export function listarAnexos(id: number) {
 
 export function listarMonitorizacoes(id: number) {
   return apiGet<MonitorizacaoProntuario[]>(`${prontuarioPath(id)}/monitorizacoes`);
+}
+
+export function listarMonitorizacoesRevisadas(id: number) {
+  return apiGet<MonitorizacaoProntuario[]>(`${prontuarioPath(id)}/monitorizacoes?status=revisado`);
+}
+
+export function listarLinhasMonitorizacao(prontuarioId: number, monitorizacaoId: number) {
+  return apiGet<MonitorizacaoLinha[]>(
+    `${prontuarioPath(prontuarioId)}/monitorizacoes/${encodeURIComponent(String(monitorizacaoId))}/linhas`,
+  );
+}
+
+export function enviarPdfMonitorizacao(prontuarioId: number, arquivo: File) {
+  const formData = new FormData();
+  formData.append('tipo_anexo', 'pdf_monitorizacao');
+  formData.append('arquivo', arquivo, arquivo.name);
+  return apiPostForm<AnexoProntuario>(`${prontuarioPath(prontuarioId)}/anexos/upload`, formData);
+}
+
+export function importarMonitorizacaoConfirmada(
+  prontuarioId: number,
+  monitorizacaoId: number,
+  payload: ImportarMonitorizacaoConfirmadaPayload,
+) {
+  return apiPost<unknown, ImportarMonitorizacaoConfirmadaPayload>(
+    `${prontuarioPath(prontuarioId)}/monitorizacoes/${encodeURIComponent(String(monitorizacaoId))}/importar-confirmadas`,
+    payload,
+  );
 }

@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { buscarProntuario, listarFluidoterapias, listarMedicacoes } from '../api/prontuarios';
+import MonitorizacaoTable from '../components/MonitorizacaoTable.vue';
+import {
+  buscarProntuario,
+  listarFluidoterapias,
+  listarLinhasMonitorizacao,
+  listarMedicacoes,
+  listarMonitorizacoesRevisadas,
+} from '../api/prontuarios';
 import type {
   FluidoterapiaProntuario,
   MedicacaoProntuario,
   MedicacaoProntuarioCategoria,
+  MonitorizacaoLinha,
+  MonitorizacaoProntuario,
   ProntuarioAnestesico,
   ProntuarioProfissional,
 } from '../types/api';
@@ -32,6 +41,12 @@ const TRANS_SUBCATEGORIAS = [
 const prontuario = ref<ProntuarioAnestesico | null>(null);
 const medicacoes = ref<MedicacaoProntuario[]>([]);
 const fluidoterapias = ref<FluidoterapiaProntuario[]>([]);
+interface MonitorizacaoParaImpressao {
+  monitorizacao: MonitorizacaoProntuario;
+  linhas: MonitorizacaoLinha[];
+}
+
+const monitorizacoes = ref<MonitorizacaoParaImpressao[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 let tituloOriginal: string | null = null;
@@ -140,19 +155,29 @@ const transAnestesicas = computed(() => TRANS_SUBCATEGORIAS.map((subcategoria) =
   itens: medicacoesTrans(subcategoria.value),
 })).filter((secao) => secao.itens.length > 0));
 
+function datasMonitorizacao(linhas: MonitorizacaoLinha[]) {
+  const datas = [...new Set(linhas.map((linha) => linha.data_medicao).filter((data): data is string => Boolean(data)))];
+  return datas.map(formatDate).join(', ');
+}
+
 async function load() {
   loading.value = true;
   error.value = null;
 
   try {
-    const [dadosProntuario, dadosMedicacoes, dadosFluidoterapias] = await Promise.all([
+    const [dadosProntuario, dadosMedicacoes, dadosFluidoterapias, dadosMonitorizacoes] = await Promise.all([
       buscarProntuario(props.prontuarioId),
       listarMedicacoes(props.prontuarioId),
       listarFluidoterapias(props.prontuarioId),
+      listarMonitorizacoesRevisadas(props.prontuarioId),
     ]);
     prontuario.value = dadosProntuario;
     medicacoes.value = dadosMedicacoes;
     fluidoterapias.value = dadosFluidoterapias;
+    monitorizacoes.value = await Promise.all(dadosMonitorizacoes.map(async (monitorizacao) => ({
+      monitorizacao,
+      linhas: await listarLinhasMonitorizacao(props.prontuarioId, monitorizacao.id),
+    })));
   } catch (err) {
     error.value = getErrorMessage(err);
   } finally {
@@ -314,6 +339,11 @@ onBeforeUnmount(restaurarTitulo);
       <section v-if="hasContent(prontuario.observacoes_pre_anestesicas)" class="print-section">
         <h2>Observacoes</h2>
         <p class="print-observations">{{ prontuario.observacoes_pre_anestesicas }}</p>
+      </section>
+
+      <section v-for="item in monitorizacoes" :key="item.monitorizacao.id" class="print-section print-monitor-section">
+        <h2>Monitorizacao<span v-if="datasMonitorizacao(item.linhas)"> — {{ datasMonitorizacao(item.linhas) }}</span></h2>
+        <MonitorizacaoTable :linhas="item.linhas" ocultar-colunas-vazias />
       </section>
     </article>
   </main>

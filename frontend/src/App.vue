@@ -6,9 +6,10 @@ import ProntuarioEditView from './pages/ProntuarioEditView.vue';
 import ProntuarioDetailView from './pages/ProntuarioDetailView.vue';
 import ProntuarioListView from './pages/ProntuarioListView.vue';
 import ProntuarioPrintView from './pages/ProntuarioPrintView.vue';
+import MonitorizacaoImportView from './pages/MonitorizacaoImportView.vue';
 import InstallPrompt from './components/InstallPrompt.vue';
 
-type AppView = 'list' | 'create' | 'detail' | 'edit' | 'print';
+type AppView = 'list' | 'create' | 'detail' | 'edit' | 'print' | 'monitorizacao-import';
 
 const currentView = ref<AppView>('list');
 const selectedProntuarioId = ref<number | null>(null);
@@ -30,6 +31,12 @@ function openEdit() {
 function openPrint() {
   if (selectedProntuarioId.value === null) return;
   currentView.value = 'print';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function openMonitorizacaoImport() {
+  if (selectedProntuarioId.value === null) return;
+  currentView.value = 'monitorizacao-import';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -102,11 +109,18 @@ function handleSaved(prontuario: ProntuarioAnestesico) {
     :prontuario-id="selectedProntuarioId"
     @back="backToDetail"
   />
+  <MonitorizacaoImportView
+    v-else-if="currentView === 'monitorizacao-import' && selectedProntuarioId !== null"
+    :prontuario-id="selectedProntuarioId"
+    @back="backToDetail"
+    @completed="backToDetail"
+  />
   <ProntuarioDetailView
     v-else-if="currentView === 'detail' && selectedProntuarioId !== null"
     :prontuario-id="selectedProntuarioId"
     @back="backToList"
     @edit="openEdit"
     @print="openPrint"
+    @import-monitorizacao="openMonitorizacaoImport"
   />
 </template>
