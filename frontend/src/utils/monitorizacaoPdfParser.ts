@@ -250,7 +250,7 @@ function extrairPagina(
 export async function analisarPdfMonitorizacao(arquivo: File): Promise<ResultadoParserMonitorizacao> {
   try {
     const dadosArquivo = new Uint8Array(await arquivo.arrayBuffer());
-    const documento = await pdfjsLib.getDocument({ data: dadosArquivo }).promise;
+    const documento = await pdfjsLib.getDocument({ data: dadosArquivo, isEvalSupported: false }).promise;
     const numeroPaginas = documento.numPages;
     const linhas: LinhaMonitorizacaoExtraida[] = [];
     const datas = new Set<string>();
