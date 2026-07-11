@@ -118,10 +118,22 @@ function selecionarNenhuma() {
   }
 }
 
-function alternarColuna(campo: MonitorizacaoCampoClinico) {
-  const deveSelecionar = linhas.value.some((linha) => celulaValida(linha, campo) && !linha.selecionadas[campo]);
+function colunaSelecionada(campo: MonitorizacaoCampoClinico): boolean {
+  const linhasValidas = linhas.value.filter((linha) => celulaValida(linha, campo));
+  return linhasValidas.length > 0 && linhasValidas.every((linha) => linha.selecionadas[campo]);
+}
+
+function colunaIndeterminada(campo: MonitorizacaoCampoClinico): boolean {
+  const linhasValidas = linhas.value.filter((linha) => celulaValida(linha, campo));
+  const selecionadas = linhasValidas.filter((linha) => linha.selecionadas[campo]).length;
+  return selecionadas > 0 && selecionadas < linhasValidas.length;
+}
+
+function alterarSelecaoColuna(campo: MonitorizacaoCampoClinico, event: Event) {
+  const alvo = event.target;
+  if (!(alvo instanceof HTMLInputElement)) return;
   for (const linha of linhas.value) {
-    linha.selecionadas[campo] = deveSelecionar && celulaValida(linha, campo);
+    linha.selecionadas[campo] = alvo.checked && celulaValida(linha, campo);
   }
 }
 
@@ -304,9 +316,18 @@ async function salvar() {
               <tr>
                 <th class="monitor-table__time">Horario</th>
                 <th v-for="coluna in colunasVisiveis" :key="coluna.key">
-                  <button class="monitor-column-action" type="button" :disabled="enviando" @click="alternarColuna(coluna.key)">
-                    {{ coluna.label }} <small>({{ coluna.unidade }})</small>
-                  </button>
+                  <label class="monitor-column-control">
+                    <span class="monitor-table__heading">{{ coluna.label }}<small>({{ coluna.unidade }})</small></span>
+                    <input
+                      class="monitor-column-checkbox"
+                      type="checkbox"
+                      :checked="colunaSelecionada(coluna.key)"
+                      :indeterminate="colunaIndeterminada(coluna.key)"
+                      :disabled="enviando"
+                      :aria-label="`Selecionar coluna ${coluna.label}`"
+                      @change="alterarSelecaoColuna(coluna.key, $event)"
+                    >
+                  </label>
                 </th>
               </tr>
             </thead>

@@ -28,7 +28,7 @@ const colunas = computed(() => {
         <tr>
           <th class="monitor-table__time">Horario</th>
           <th v-for="coluna in colunas" :key="coluna.key">
-            {{ coluna.label }} <small>({{ coluna.unidade }})</small>
+            <span class="monitor-table__heading">{{ coluna.label }}<small>({{ coluna.unidade }})</small></span>
           </th>
         </tr>
       </thead>
