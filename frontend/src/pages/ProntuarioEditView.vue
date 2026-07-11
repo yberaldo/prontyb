@@ -821,19 +821,21 @@ function buildFluidoterapiaPayload() {
     fluido,
     taxa_ml_kg_h: parseOptionalNumber(fluidoterapiaForm.taxa_ml_kg_h) ?? Number(FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h),
     desafio_hidrico_realizado: fluidoterapiaForm.desafio_hidrico_realizado === '1',
-    cateter_utilizado: null,
-    membro_canulado: null,
-    desafio_volume_ml_kg: null,
-    desafio_tempo_min: null,
-    desafio_quantidade: null,
-    desafio_motivo: null,
   };
 
   const cateter = textValue(fluidoterapiaForm.cateter_utilizado) as CateterFluidoterapia | '';
-  if (cateter) payload.cateter_utilizado = cateter;
+  if (cateter) {
+    payload.cateter_utilizado = cateter;
+  } else if (fluidoterapiaOriginal.value?.cateter_utilizado) {
+    payload.cateter_utilizado = null;
+  }
 
   const membro = textValue(fluidoterapiaForm.membro_canulado) as MembroCanuladoFluidoterapia | '';
-  if (membro) payload.membro_canulado = membro;
+  if (membro) {
+    payload.membro_canulado = membro;
+  } else if (fluidoterapiaOriginal.value?.membro_canulado) {
+    payload.membro_canulado = null;
+  }
 
   if (!Number.isFinite(Number(payload.taxa_ml_kg_h)) || Number(payload.taxa_ml_kg_h) < 0) {
     throw new Error('Taxa ml/kg/h deve ser um numero maior ou igual a zero.');
@@ -944,6 +946,7 @@ function resetFluidoterapiaForm() {
   fluidoterapiaForm.desafio_motivo = FLUIDOTERAPIA_PADRAO.desafio_motivo;
   fluidoterapiaId.value = null;
   fluidoterapiaOriginal.value = null;
+  fluidoterapiaOriginal.value = buildFluidoterapiaPayload();
 }
 
 function syncFluidoterapiaForm(item?: FluidoterapiaProntuario | null) {
@@ -974,12 +977,6 @@ function syncFluidoterapiaForm(item?: FluidoterapiaProntuario | null) {
       ? Number(FLUIDOTERAPIA_PADRAO.taxa_ml_kg_h)
       : Number(item.taxa_ml_kg_h),
     desafio_hidrico_realizado: item.desafio_hidrico_realizado ? true : false,
-    cateter_utilizado: null,
-    membro_canulado: null,
-    desafio_volume_ml_kg: null,
-    desafio_tempo_min: null,
-    desafio_quantidade: null,
-    desafio_motivo: null,
   };
 
   if (item.cateter_utilizado) original.cateter_utilizado = item.cateter_utilizado;
@@ -1000,13 +997,13 @@ function syncFluidoterapiaForm(item?: FluidoterapiaProntuario | null) {
   fluidoterapiaOriginal.value = original;
 }
 
-function mapMedicacaoParaFormulario(item: MedicacaoProntuario): MedicacaoBlockForm {
+function mapMedicacaoParaFormulario(item: MedicacaoProntuario, ordem = item.ordem || 0): MedicacaoBlockForm {
   const formItem = createMedicacaoBlockForm({
     id: item.id,
     subcategoria: item.subcategoria || '',
     farmaco_id: item.farmaco_id ? String(item.farmaco_id) : '',
     motivo_uso: item.motivo_uso || '',
-    originalPayload: buildMedicacaoOriginalPayload(item, item.ordem || 0),
+    originalPayload: buildMedicacaoOriginalPayload(item, ordem),
   });
 
   if (!item.farmaco_id) return formItem;
@@ -1038,7 +1035,7 @@ function mapMedicacaoParaFormulario(item: MedicacaoProntuario): MedicacaoBlockFo
 function preencherSecaoMedicacoes(
   destino: MedicacaoSectionState,
   itens: MedicacaoProntuario[],
-  builder: (item: MedicacaoProntuario) => MedicacaoBlockForm,
+  builder: (item: MedicacaoProntuario, index: number) => MedicacaoBlockForm,
 ) {
   destino.linhas.splice(0, destino.linhas.length, ...(itens.length > 0 ? itens.map(builder) : [createMedicacaoBlockForm()]));
   destino.removedIds.splice(0, destino.removedIds.length);
@@ -1047,6 +1044,77 @@ function preencherSecaoMedicacoes(
 function isProntuarioChanged() {
   try {
     return !isChangeEqual(prontuarioOriginal.value, buildProntuarioPayload());
+  } catch {
+    return true;
+  }
+}
+
+function isMedicacaoChanged(
+  formItem: MedicacaoBlockForm,
+  payload: MedicacaoProntuarioPayload | null,
+  ordem: number,
+) {
+  if (!formItem.id) return payload !== null;
+  if (!payload) return true;
+
+  const current = { ...payload, ordem };
+  return !formItem.originalPayload || !isChangeEqual(formItem.originalPayload, current);
+}
+
+function isMedicacaoSectionChanged(
+  section: MedicacaoSectionState,
+  buildPayload: (formItem: MedicacaoBlockForm, ordem: number) => MedicacaoProntuarioPayload | null,
+) {
+  if (section.removedIds.length > 0) return true;
+
+  return section.linhas.some((formItem, index) => isMedicacaoChanged(
+    formItem,
+    buildPayload(formItem, index + 1),
+    index + 1,
+  ));
+}
+
+function hasUnsavedChanges() {
+  try {
+    if (isProntuarioChanged()) return true;
+    if (!isChangeEqual(fluidoterapiaOriginal.value, buildFluidoterapiaPayload())) return true;
+
+    const sedativoPayload = getMedicacaoPayloadFromForm(mpaForm.sedativo, {
+      categoria: MPA_CONFIG.sedativo.categoria,
+      subcategoria: MPA_CONFIG.sedativo.subcategoria,
+      titulo: MPA_CONFIG.sedativo.titulo,
+      ordem: 1,
+    }, {
+      requireDose: false,
+      unidadesOutraDose: UNIDADES_MPA_OUTRA_DOSE,
+    });
+    if (isMedicacaoChanged(mpaForm.sedativo, sedativoPayload, 1)) return true;
+
+    const opioidePayload = getMedicacaoPayloadFromForm(mpaForm.opioide, {
+      categoria: MPA_CONFIG.opioide.categoria,
+      subcategoria: MPA_CONFIG.opioide.subcategoria,
+      titulo: MPA_CONFIG.opioide.titulo,
+      ordem: 2,
+    }, {
+      requireDose: false,
+      unidadesOutraDose: UNIDADES_MPA_OUTRA_DOSE,
+    });
+    if (isMedicacaoChanged(mpaForm.opioide, opioidePayload, 2)) return true;
+
+    if (isMedicacaoSectionChanged(inducaoForm, (formItem) => getInducaoPayloadFromForm(formItem))) return true;
+    if (isMedicacaoSectionChanged(manutencaoForm, (formItem, ordem) => getMedicacaoPayloadFromForm(
+      formItem,
+      {
+        categoria: MANUTENCAO_CONFIG.categoria,
+        subcategoria: MANUTENCAO_CONFIG.subcategoria,
+        titulo: MANUTENCAO_CONFIG.titulo,
+        ordem,
+      },
+      { unidadesOutraDose: getUnidadesOutraDoseDoFarmaco },
+    ))) return true;
+    if (isMedicacaoSectionChanged(transForm, (formItem) => getTransPayloadFromForm(formItem))) return true;
+
+    return false;
   } catch {
     return true;
   }
@@ -1113,22 +1181,6 @@ async function carregarOpcoesBasicas() {
 
 function fillProntuarioForm(data: ProntuarioAnestesico) {
   prontuario.value = data;
-  prontuarioOriginal.value = {
-    clinica_id: data.clinica_id ?? null,
-    nome_animal: data.nome_animal ?? null,
-    especie: data.especie ?? null,
-    raca: data.raca ?? null,
-    sexo: data.sexo ?? null,
-    idade: data.idade === null || typeof data.idade === 'undefined' ? null : String(data.idade),
-    peso: data.peso === null || typeof data.peso === 'undefined' ? null : Number(data.peso),
-    nome_tutor: data.nome_tutor ?? null,
-    nome_procedimento: data.nome_procedimento ?? null,
-    data_procedimento: data.data_procedimento ?? null,
-    cirurgiao_id: data.cirurgiao_id ?? null,
-    anestesista_id: data.anestesista_id ?? null,
-    observacoes_pre_anestesicas: data.observacoes_pre_anestesicas ?? null,
-  };
-
   form.clinica_id = data.clinica_id ? String(data.clinica_id) : '';
   form.nome_animal = data.nome_animal || '';
   form.especie = data.especie || 'canina';
@@ -1137,10 +1189,12 @@ function fillProntuarioForm(data: ProntuarioAnestesico) {
   form.nome_tutor = data.nome_tutor || '';
   form.nome_procedimento = data.nome_procedimento || '';
   form.data_procedimento = data.data_procedimento || '';
+  form.peso = data.peso === null || typeof data.peso === 'undefined' ? '' : String(data.peso);
   form.cirurgiao_id = data.cirurgiao_id ? String(data.cirurgiao_id) : '';
   form.anestesista_id = data.anestesista_id ? String(data.anestesista_id) : '';
   form.observacoes_pre_anestesicas = data.observacoes_pre_anestesicas || '';
   parseIdadeEmForm(data.idade);
+  prontuarioOriginal.value = buildProntuarioPayload();
 }
 
 async function loadDosesForMedicacoes(itens: MedicacaoProntuario[]) {
@@ -1174,12 +1228,12 @@ function hydrateMedicacaoForms(itens: MedicacaoProntuario[]) {
   const sedativo = itens.find((item) => item.categoria === 'pre_anestesica_sedativo') || null;
   const opioide = itens.find((item) => item.categoria === 'pre_anestesica_opioide') || null;
   if (sedativo) {
-    mpaForm.sedativo = mapMedicacaoParaFormulario(sedativo);
+    mpaForm.sedativo = mapMedicacaoParaFormulario(sedativo, 1);
   } else {
     mpaForm.sedativo = createMedicacaoBlockForm();
   }
   if (opioide) {
-    mpaForm.opioide = mapMedicacaoParaFormulario(opioide);
+    mpaForm.opioide = mapMedicacaoParaFormulario(opioide, 2);
   } else {
     mpaForm.opioide = createMedicacaoBlockForm();
   }
@@ -1201,7 +1255,7 @@ function hydrateMedicacaoForms(itens: MedicacaoProntuario[]) {
   );
 }
 
-async function carregarFormulario() {
+async function carregarFormulario(): Promise<ProntuarioAnestesico | null> {
   loadingData.value = true;
   error.value = null;
 
@@ -1217,8 +1271,10 @@ async function carregarFormulario() {
     await loadDosesForMedicacoes(medicacoesData);
     hydrateMedicacaoForms(medicacoesData);
     syncFluidoterapiaForm(fluidoterapiasData[0] || null);
+    return prontuarioData;
   } catch (err) {
     error.value = getErrorMessage(err, 'Nao foi possivel carregar o prontuario para edicao.');
+    return null;
   } finally {
     loadingData.value = false;
   }
@@ -1286,7 +1342,7 @@ function collectMedicacaoOperations(
 async function saveFluidoterapia() {
   const payload = buildFluidoterapiaPayload();
   const original = fluidoterapiaOriginal.value;
-  if (fluidoterapiaId.value && original && isChangeEqual(original, payload)) {
+  if (original && isChangeEqual(original, payload)) {
     return [];
   }
 
@@ -1434,24 +1490,21 @@ async function saveProntuario() {
     return;
   }
 
-  try {
-    const refreshed = await buscarProntuario(props.prontuarioId);
-    successMessage.value = 'Prontuario atualizado com sucesso.';
-    emit('saved', refreshed);
-  } catch (err) {
-    successMessage.value = 'Prontuario atualizado com sucesso.';
-    error.value = getErrorMessage(err, 'Nao foi possivel recarregar o prontuario apos a atualizacao.');
-    if (prontuario.value) {
-      emit('saved', prontuario.value);
-    }
-  } finally {
+  const refreshed = await carregarFormulario();
+  if (!refreshed) {
+    error.value = 'O prontuario foi atualizado, mas nao foi possivel recarregar os dados. As alteracoes podem ter sido salvas.';
     saving.value = false;
+    return;
   }
+
+  successMessage.value = 'Prontuario atualizado com sucesso.';
+  saving.value = false;
+  emit('saved', refreshed);
 }
 
 function confirmCancel() {
   if (saving.value) return;
-  if (isProntuarioChanged()) {
+  if (hasUnsavedChanges()) {
     const discard = window.confirm('Ha alteracoes nao salvas. Deseja descartar as alteracoes?');
     if (!discard) return;
   }
