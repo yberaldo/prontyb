@@ -85,6 +85,23 @@ export interface CriarProntuarioPayload {
   observacoes_pre_anestesicas?: string | null;
 }
 
+export interface AtualizarProntuarioPayload {
+  numero_prontuario?: string | null;
+  clinica_id?: number | null;
+  nome_animal?: string | null;
+  especie?: string | null;
+  raca?: string | null;
+  sexo?: string | null;
+  idade?: string | null;
+  peso?: number | null;
+  nome_tutor?: string | null;
+  nome_procedimento?: string | null;
+  data_procedimento?: string | null;
+  cirurgiao_id?: number | null;
+  anestesista_id?: number | null;
+  observacoes_pre_anestesicas?: string | null;
+}
+
 export type MedicacaoProntuarioCategoria =
   | 'pre_anestesica_sedativo'
   | 'pre_anestesica_opioide'

@@ -1,6 +1,7 @@
-import { apiGet, apiPost, apiPut } from './client';
+import { apiDelete, apiGet, apiPost, apiPut } from './client';
 import type {
   AnexoProntuario,
+  AtualizarProntuarioPayload,
   CriarProntuarioPayload,
   FluidoterapiaProntuario,
   FluidoterapiaProntuarioPayload,
@@ -26,6 +27,10 @@ export function criarProntuario(payload: CriarProntuarioPayload) {
   return apiPost<ProntuarioAnestesico, CriarProntuarioPayload>('/prontuarios_anestesicos', payload);
 }
 
+export function atualizarProntuario(id: number, payload: AtualizarProntuarioPayload) {
+  return apiPut<ProntuarioAnestesico, AtualizarProntuarioPayload>(prontuarioPath(id), payload);
+}
+
 export function listarMedicacoes(id: number) {
   return apiGet<MedicacaoProntuario[]>(`${prontuarioPath(id)}/medicacoes`);
 }
@@ -34,6 +39,23 @@ export function criarMedicacao(prontuarioId: number, payload: MedicacaoProntuari
   return apiPost<MedicacaoProntuario, MedicacaoProntuarioPayload>(
     `${prontuarioPath(prontuarioId)}/medicacoes`,
     payload,
+  );
+}
+
+export function atualizarMedicacao(
+  prontuarioId: number,
+  medicacaoId: number,
+  payload: MedicacaoProntuarioPayload,
+) {
+  return apiPut<MedicacaoProntuario, MedicacaoProntuarioPayload>(
+    `${prontuarioPath(prontuarioId)}/medicacoes/${encodeURIComponent(String(medicacaoId))}`,
+    payload,
+  );
+}
+
+export function removerMedicacao(prontuarioId: number, medicacaoId: number) {
+  return apiDelete<void>(
+    `${prontuarioPath(prontuarioId)}/medicacoes/${encodeURIComponent(String(medicacaoId))}`,
   );
 }
 
@@ -56,6 +78,12 @@ export function atualizarFluidoterapia(
   return apiPut<FluidoterapiaProntuario, FluidoterapiaProntuarioPayload>(
     `${prontuarioPath(prontuarioId)}/fluidoterapias/${encodeURIComponent(String(fluidoterapiaId))}`,
     payload,
+  );
+}
+
+export function removerFluidoterapia(prontuarioId: number, fluidoterapiaId: number) {
+  return apiDelete<void>(
+    `${prontuarioPath(prontuarioId)}/fluidoterapias/${encodeURIComponent(String(fluidoterapiaId))}`,
   );
 }
 

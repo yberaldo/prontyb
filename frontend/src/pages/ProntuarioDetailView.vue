@@ -30,6 +30,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   back: [];
+  edit: [];
 }>();
 
 interface SectionState<T> {
@@ -441,6 +442,9 @@ onMounted(reloadAll);
         <p class="eyebrow">Detalhe do prontuario</p>
         <h1>{{ prontuario?.numero_prontuario || `#${prontuarioId}` }}</h1>
       </div>
+      <button class="secondary-action" type="button" :disabled="loadingProntuario || !prontuario" @click="emit('edit')">
+        Editar prontuario
+      </button>
       <button class="primary-action" type="button" @click="reloadAll">Atualizar</button>
     </header>
 

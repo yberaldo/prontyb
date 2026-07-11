@@ -2,11 +2,12 @@
 import { ref } from 'vue';
 import type { ProntuarioAnestesico } from './types/api';
 import ProntuarioCreateView from './pages/ProntuarioCreateView.vue';
+import ProntuarioEditView from './pages/ProntuarioEditView.vue';
 import ProntuarioDetailView from './pages/ProntuarioDetailView.vue';
 import ProntuarioListView from './pages/ProntuarioListView.vue';
 import InstallPrompt from './components/InstallPrompt.vue';
 
-type AppView = 'list' | 'create' | 'detail';
+type AppView = 'list' | 'create' | 'detail' | 'edit';
 
 const currentView = ref<AppView>('list');
 const selectedProntuarioId = ref<number | null>(null);
@@ -16,6 +17,12 @@ const listMessage = ref<string | null>(null);
 function openProntuario(id: number) {
   currentView.value = 'detail';
   selectedProntuarioId.value = id;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function openEdit() {
+  if (selectedProntuarioId.value === null) return;
+  currentView.value = 'edit';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -31,6 +38,15 @@ function backToList() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function backToDetail() {
+  if (selectedProntuarioId.value === null) {
+    backToList();
+    return;
+  }
+  currentView.value = 'detail';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function handleCreated(prontuario: ProntuarioAnestesico) {
   listKey.value += 1;
 
@@ -41,6 +57,15 @@ function handleCreated(prontuario: ProntuarioAnestesico) {
 
   listMessage.value = 'Prontuario criado com sucesso.';
   backToList();
+}
+
+function handleSaved(prontuario: ProntuarioAnestesico) {
+  if (!prontuario.id) {
+    backToDetail();
+    return;
+  }
+
+  openProntuario(prontuario.id);
 }
 </script>
 
@@ -59,9 +84,16 @@ function handleCreated(prontuario: ProntuarioAnestesico) {
     @back="backToList"
     @created="handleCreated"
   />
+  <ProntuarioEditView
+    v-else-if="currentView === 'edit' && selectedProntuarioId !== null"
+    :prontuario-id="selectedProntuarioId"
+    @cancel="backToDetail"
+    @saved="handleSaved"
+  />
   <ProntuarioDetailView
-    v-else-if="selectedProntuarioId !== null"
+    v-else-if="currentView === 'detail' && selectedProntuarioId !== null"
     :prontuario-id="selectedProntuarioId"
     @back="backToList"
+    @edit="openEdit"
   />
 </template>

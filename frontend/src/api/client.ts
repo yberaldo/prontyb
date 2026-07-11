@@ -108,3 +108,34 @@ export async function apiPut<T, B = unknown>(path: string, payload: B): Promise<
 
   return body.dados;
 }
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  let body: ApiEnvelope<T> | null = null;
+  try {
+    body = (await response.json()) as ApiEnvelope<T>;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    throw new ApiError(body?.mensagem || `Erro HTTP ${response.status}`, response.status);
+  }
+
+  if (!body) {
+    throw new ApiError('Resposta invalida da API', response.status);
+  }
+
+  if (!body.ok) {
+    throw new ApiError(body.mensagem || 'Erro retornado pela API', response.status);
+  }
+
+  return body.dados;
+}
