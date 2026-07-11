@@ -35,6 +35,21 @@ export interface ProntuarioAnestesico {
   cirurgiao_nome?: string | null;
   cirurgiao_crmv?: string | null;
   cirurgiao_uf?: string | null;
+  clinica?: ProntuarioClinica | null;
+  anestesista?: ProntuarioProfissional | null;
+  cirurgiao?: ProntuarioProfissional | null;
+}
+
+export interface ProntuarioClinica {
+  id: number | null;
+  nome: string | null;
+}
+
+export interface ProntuarioProfissional {
+  id: number | null;
+  nome: string | null;
+  crmv: string | null;
+  uf: string | null;
 }
 
 export interface CategoriaFarmaco {
@@ -187,7 +202,7 @@ export interface FluidoterapiaProntuario {
   cateter_utilizado?: CateterFluidoterapia | null;
   membro_canulado?: MembroCanuladoFluidoterapia | null;
   taxa_ml_kg_h?: string | number | null;
-  desafio_hidrico_realizado?: boolean | number | null;
+  desafio_hidrico_realizado?: boolean | number | string | null;
   desafio_volume_ml_kg?: string | number | null;
   desafio_tempo_min?: string | number | null;
   desafio_quantidade?: string | number | null;
