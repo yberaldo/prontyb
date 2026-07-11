@@ -1144,7 +1144,13 @@ function fillProntuarioForm(data: ProntuarioAnestesico) {
 }
 
 async function loadDosesForMedicacoes(itens: MedicacaoProntuario[]) {
-  const farmacoIds = Array.from(new Set(itens.map((item) => item.farmaco_id).filter((id): id is number => Number.isSafeInteger(id) && id > 0)));
+  const farmacoIds = Array.from(
+    new Set(
+      itens
+        .map((item) => item.farmaco_id)
+        .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0),
+    ),
+  );
   let houveFalha = false;
   await Promise.all(farmacoIds.map(async (farmacoId) => {
     if (Object.prototype.hasOwnProperty.call(dosesPorFarmaco, farmacoId)) return;
