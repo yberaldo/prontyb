@@ -11,6 +11,8 @@ module.exports = function (fastify, opts, done) {
 
   fastify.post('/prontuarios_anestesicos/:prontuario_id/monitorizacoes/:monitorizacao_extraida_id/processamento-manual', controlador.processarManual);
 
+  fastify.post('/prontuarios_anestesicos/:prontuario_id/monitorizacoes/:monitorizacao_extraida_id/importar-confirmadas', controlador.importarConfirmadas);
+
   fastify.post('/prontuarios_anestesicos/:prontuario_id/monitorizacoes/:monitorizacao_extraida_id/revisar', controlador.revisar);
 
   done();

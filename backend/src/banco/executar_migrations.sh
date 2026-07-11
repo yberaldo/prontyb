@@ -54,6 +54,7 @@ MIGS=(
   "migrations/011_criar_tabela_monitorizacoes_extraidas.sql"
   "migrations/012_criar_tabela_monitorizacao_linhas.sql"
   "migrations/013_adicionar_colunas_cateter_membro_fluidoterapias.sql"
+  "migrations/014_adicionar_deduplicacao_importacao_monitorizacao.sql"
 )
 
 for m in "${MIGS[@]}"; do

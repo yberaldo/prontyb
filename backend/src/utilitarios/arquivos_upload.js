@@ -1,6 +1,7 @@
 'use strict'
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES = 20 * 1024 * 1024;
@@ -114,11 +115,23 @@ function estaDentroDiretorio(diretorioBase, destino) {
   return relativo === '' || (!relativo.startsWith('..') && !path.isAbsolute(relativo));
 }
 
+function calcularSha256Arquivo(caminhoArquivo) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(caminhoArquivo);
+
+    stream.on('error', reject);
+    stream.on('data', chunk => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
 module.exports = {
   LIMITE_TAMANHO_UPLOAD_ANEXO_BYTES,
   TIPOS_ANEXO_PERMITIDOS,
   MIME_EXTENSOES_PERMITIDAS,
   erroValidacao,
   gerarNomeFinal,
-  estaDentroDiretorio
+  estaDentroDiretorio,
+  calcularSha256Arquivo
 };

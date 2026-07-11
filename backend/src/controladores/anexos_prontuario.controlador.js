@@ -139,6 +139,7 @@ module.exports = {
       } catch (err) {
         if (err && err.code === 'BAD_REQUEST') return reply.code(400).send({ ok: false, mensagem: err.message });
         if (err && err.code === 'NOT_FOUND') return reply.code(404).send({ ok: false, mensagem: err.message });
+        if (err && err.code === 'CONFLICT') return reply.code(409).send({ ok: false, mensagem: err.message });
         throw err;
       }
     } catch (err) {

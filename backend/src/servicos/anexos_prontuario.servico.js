@@ -11,7 +11,8 @@ const {
   MIME_EXTENSOES_PERMITIDAS,
   erroValidacao,
   gerarNomeFinal,
-  estaDentroDiretorio
+  estaDentroDiretorio,
+  calcularSha256Arquivo
 } = require('../utilitarios/arquivos_upload');
 
 const DIRETORIO_BACKEND = path.resolve(__dirname, '..', '..');
@@ -97,16 +98,17 @@ function validarArquivoUpload(arquivo) {
   if (!Object.prototype.hasOwnProperty.call(MIME_EXTENSOES_PERMITIDAS, arquivo.mime_type)) throw erroValidacao('mime_type invalido');
 }
 
-async function criarMonitorizacaoPendenteSeNecessario(fastify, anexo) {
+async function criarMonitorizacaoPendenteSeNecessario(fastify, anexo, arquivo_sha256 = null) {
   if (!anexo || anexo.tipo_anexo !== TIPO_ANEXO_MONITORIZACAO) return null;
 
   try {
     return await monitorizacoesRepo.criarPendentePorAnexo(fastify, {
       prontuario_id: anexo.prontuario_id,
-      anexo_id: anexo.id
+      anexo_id: anexo.id,
+      arquivo_sha256
     });
   } catch (err) {
-    if (err && err.code === 'ER_DUP_ENTRY') throw erroValidacao('monitorizacao ja existe para anexo');
+    if (err && err.code === 'ER_DUP_ENTRY') throw erroValidacao('arquivo de monitorizacao ja existe para este prontuario', 'CONFLICT');
     throw err;
   }
 }
@@ -237,6 +239,7 @@ module.exports = {
 
     let insertId = null;
     let arquivoCriado = false;
+    let anexoCriado = null;
 
     try {
       await fs.mkdir(diretorioProntuario, { recursive: true });
@@ -244,6 +247,9 @@ module.exports = {
       arquivoCriado = true;
 
       const stat = await fs.stat(caminhoAbsoluto);
+      const arquivo_sha256 = dados.tipo_anexo === TIPO_ANEXO_MONITORIZACAO
+        ? await calcularSha256Arquivo(caminhoAbsoluto)
+        : null;
       const toInsert = {
         prontuario_id: prontuario_id,
         tipo_anexo: dados.tipo_anexo,
@@ -256,15 +262,19 @@ module.exports = {
       insertId = await repositorio.criar(fastify, toInsert);
       const row = await repositorio.buscarPorId(fastify, insertId);
       if (!row) throw new Error('anexo inserido nao encontrado');
+      anexoCriado = row;
 
-      await criarMonitorizacaoPendenteSeNecessario(fastify, row);
+      await criarMonitorizacaoPendenteSeNecessario(fastify, row, arquivo_sha256);
       return module.exports._serialize(row);
     } catch (err) {
       if (insertId !== null) {
         try { await repositorio.remover(fastify, insertId); } catch (_) {}
       }
       if (arquivoCriado) {
-        try { await removerArquivoSeExistir(caminhoAbsoluto); } catch (_) {}
+        try {
+          if (anexoCriado) await removerArquivoFisicoDoAnexo(fastify, prontuario_id, anexoCriado);
+          else await removerArquivoSeExistir(caminhoAbsoluto);
+        } catch (_) {}
       }
       if (err && err.code === 'EEXIST') throw erroValidacao('arquivo ja existe');
       if (err && err.code === 'ER_DUP_ENTRY') throw erroValidacao('caminho_arquivo ja existe');
