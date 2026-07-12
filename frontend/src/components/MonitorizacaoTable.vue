@@ -22,7 +22,7 @@ const colunas = computed(() => {
 </script>
 
 <template>
-  <div class="monitor-table-wrap">
+  <div class="monitor-table-wrap monitor-table-wrap--screen">
     <table class="monitor-table">
       <thead>
         <tr>

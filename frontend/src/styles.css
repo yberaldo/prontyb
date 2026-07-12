@@ -847,3 +847,430 @@ button {
     display: none;
   }
 }
+
+/* Documento completo de impressao */
+.print-document {
+  gap: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.print-sheet {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid rgba(24, 33, 31, 0.12);
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(31, 41, 55, 0.08);
+}
+
+.print-document-header {
+  border: 0;
+  padding: 0 0 8px;
+}
+
+.print-document-header h1,
+.print-monitor-header h2 {
+  margin: 0;
+  color: #111111;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.print-document-header h1 {
+  font-size: 1.8rem;
+}
+
+.print-document-header p {
+  color: #4b5c57;
+  font-size: 0.82rem;
+}
+
+.print-section {
+  gap: 8px;
+}
+
+.print-section h2 {
+  color: #111111;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.print-record-grid,
+.print-monitor-identification {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid #667085;
+  border-left: 1px solid #667085;
+}
+
+.print-record-grid > div,
+.print-monitor-identification > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.78fr) minmax(0, 1.22fr);
+  min-width: 0;
+  border-right: 1px solid #667085;
+  border-bottom: 1px solid #667085;
+}
+
+.print-record-grid dt,
+.print-record-grid dd,
+.print-monitor-identification dt,
+.print-monitor-identification dd {
+  margin: 0;
+  padding: 7px 8px;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.print-record-grid dt,
+.print-monitor-identification dt {
+  font-weight: 800;
+  background: #edf0f4;
+}
+
+.print-record-grid dd {
+  background: #ffffff;
+}
+
+.print-record-grid__wide,
+.print-monitor-identification__wide {
+  grid-column: 1 / -1;
+}
+
+.print-record-grid__wide dd,
+.print-monitor-identification__wide dd {
+  grid-column: auto;
+}
+
+.print-professionals,
+.print-text-block,
+.print-therapy-item,
+.print-monitor-empty {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.print-professionals {
+  display: grid;
+  gap: 3px;
+}
+
+.print-professionals p {
+  margin: 0;
+}
+
+.print-therapy-list {
+  display: grid;
+  gap: 9px;
+}
+
+.print-therapy-group {
+  display: grid;
+  gap: 3px;
+}
+
+.print-therapy-group h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.print-therapy-item {
+  padding-left: 16px;
+}
+
+.print-fluid-card {
+  padding: 8px;
+  border-color: #aeb7b4;
+  border-radius: 0;
+}
+
+.print-monitor-page {
+  align-content: start;
+  overflow: visible;
+}
+
+.print-monitor-header h2 {
+  font-size: 1.55rem;
+}
+
+.print-monitor-identification {
+  background: #dfe8f7;
+}
+
+.print-monitor-identification dt,
+.print-monitor-identification dd {
+  background: #dfe8f7;
+}
+
+.print-monitor-intro {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px;
+  border-right: 1px solid #667085;
+  border-bottom: 1px solid #667085;
+  line-height: 1.35;
+}
+
+.print-monitor-table {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #111111;
+  font-size: 0.7rem;
+}
+
+.print-monitor-table__time-column {
+  width: 9%;
+}
+
+.print-monitor-table th,
+.print-monitor-table td {
+  min-width: 0;
+  padding: 5px 2px;
+  border: 1px solid #667085;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.print-monitor-table thead th {
+  font-weight: 800;
+  line-height: 1.15;
+  background: #dfe8f7;
+}
+
+.print-monitor-table th span,
+.print-monitor-table th small {
+  display: block;
+}
+
+.print-monitor-table th small {
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.print-signature {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin-top: 28px;
+  text-align: center;
+}
+
+.print-signature span {
+  display: block;
+}
+
+@media print {
+  :root,
+  html,
+  body,
+  #app {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: visible;
+    background: #ffffff;
+  }
+
+  body {
+    font-size: 9.5pt;
+  }
+
+  .print-page,
+  .print-document,
+  .print-sheet,
+  .print-monitor-page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: visible;
+    transform: none;
+  }
+
+  .print-page {
+    margin: 0;
+    padding: 0;
+  }
+
+  .print-document {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .print-sheet {
+    display: grid;
+    gap: 11px;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-sheet--second,
+  .print-monitor-page {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-document-header h1 {
+    font-size: 17pt;
+  }
+
+  .print-document-header p {
+    font-size: 8pt;
+  }
+
+  .print-section {
+    gap: 5px;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-section h2 {
+    font-size: 10.5pt;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .print-record-grid,
+  .print-monitor-identification,
+  .print-fluid-card,
+  .print-therapy-group {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-record-grid > div,
+  .print-monitor-identification > div {
+    grid-template-columns: minmax(25mm, 0.72fr) minmax(0, 1.28fr);
+  }
+
+  .print-record-grid dt,
+  .print-record-grid dd,
+  .print-monitor-identification dt,
+  .print-monitor-identification dd {
+    padding: 4px 5px;
+    font-size: 8.5pt;
+  }
+
+  .print-professionals,
+  .print-text-block,
+  .print-therapy-item,
+  .print-monitor-intro,
+  .print-monitor-empty {
+    font-size: 9pt;
+  }
+
+  .print-therapy-list {
+    gap: 6px;
+  }
+
+  .print-therapy-group {
+    gap: 2px;
+  }
+
+  .print-therapy-group h3 {
+    font-size: 9pt;
+  }
+
+  .print-therapy-item {
+    padding-left: 8mm;
+  }
+
+  .print-data-grid dt,
+  .print-data-grid dd {
+    font-size: 8pt;
+  }
+
+  .monitor-table-wrap--screen {
+    display: none !important;
+  }
+
+  .print-monitor-page {
+    display: block;
+  }
+
+  .print-monitor-header {
+    margin-bottom: 10px;
+  }
+
+  .print-monitor-header h2 {
+    font-size: 16pt;
+  }
+
+  .print-monitor-identification {
+    margin-bottom: 0;
+  }
+
+  .print-monitor-intro {
+    padding: 5px;
+    font-size: 8pt;
+  }
+
+  .print-monitor-table {
+    display: table;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+    overflow: visible;
+    font-size: 7.2pt;
+    transform: none;
+  }
+
+  .print-monitor-table thead {
+    display: table-header-group;
+  }
+
+  .print-monitor-table tbody {
+    display: table-row-group;
+  }
+
+  .print-monitor-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-monitor-table th,
+  .print-monitor-table td {
+    position: static;
+    min-width: 0;
+    padding: 3px 1px;
+    overflow: visible;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .print-monitor-table th small {
+    font-size: 6.2pt;
+  }
+
+  .print-signature {
+    margin-top: 15mm;
+    font-size: 9pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

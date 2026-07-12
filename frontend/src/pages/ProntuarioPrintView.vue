@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import MonitorizacaoTable from '../components/MonitorizacaoTable.vue';
+import MonitorizacaoPrintTable from '../components/MonitorizacaoPrintTable.vue';
 import {
   buscarProntuario,
   listarFluidoterapias,
@@ -27,8 +27,8 @@ const emit = defineEmits<{
   back: [];
 }>();
 
+const NAO_INFORMADO = 'Nao informado';
 const FARMACOS_INALATORIOS = new Set(['isoflurano', 'sevoflurano']);
-
 const TRANS_SUBCATEGORIAS = [
   { value: 'analgesia', label: 'Analgesia' },
   { value: 'vasopressores_inotropicos', label: 'Vasopressores / Inotropicos' },
@@ -38,14 +38,14 @@ const TRANS_SUBCATEGORIAS = [
   { value: 'outros', label: 'Outros' },
 ] as const;
 
-const prontuario = ref<ProntuarioAnestesico | null>(null);
-const medicacoes = ref<MedicacaoProntuario[]>([]);
-const fluidoterapias = ref<FluidoterapiaProntuario[]>([]);
 interface MonitorizacaoParaImpressao {
   monitorizacao: MonitorizacaoProntuario;
   linhas: MonitorizacaoLinha[];
 }
 
+const prontuario = ref<ProntuarioAnestesico | null>(null);
+const medicacoes = ref<MedicacaoProntuario[]>([]);
+const fluidoterapias = ref<FluidoterapiaProntuario[]>([]);
 const monitorizacoes = ref<MonitorizacaoParaImpressao[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -55,8 +55,22 @@ function getErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : 'Nao foi possivel carregar o prontuario para impressao.';
 }
 
-function hasContent(value?: string | number | null) {
+function hasContent(value?: string | number | boolean | null) {
   return value !== null && typeof value !== 'undefined' && String(value).trim() !== '';
+}
+
+function valorOuNaoInformado(value?: string | number | null) {
+  return hasContent(value) ? String(value) : NAO_INFORMADO;
+}
+
+function dataOuNaoInformada(value?: string | null) {
+  return hasContent(value) ? formatDate(value) : NAO_INFORMADO;
+}
+
+function pesoOuNaoInformado(value?: string | number | null) {
+  if (!hasContent(value)) return NAO_INFORMADO;
+  const texto = String(value);
+  return /\bkg\b/i.test(texto) ? texto : `${texto} kg`;
 }
 
 function nomeClinica(record: ProntuarioAnestesico) {
@@ -70,12 +84,30 @@ function nomeProfissional(
   return nomePlano || profissional?.nome || null;
 }
 
+function registroProfissional(
+  crmvPlano: string | null | undefined,
+  ufPlano: string | null | undefined,
+  profissional: ProntuarioProfissional | null | undefined,
+) {
+  const crmv = crmvPlano || profissional?.crmv;
+  const uf = ufPlano || profissional?.uf;
+  if (!crmv) return null;
+  return `CRMV${uf ? `-${uf}` : ''} ${crmv}`;
+}
+
+function descricaoProfissional(
+  nomePlano: string | null | undefined,
+  crmvPlano: string | null | undefined,
+  ufPlano: string | null | undefined,
+  profissional: ProntuarioProfissional | null | undefined,
+) {
+  const nome = nomeProfissional(nomePlano, profissional);
+  const registro = registroProfissional(crmvPlano, ufPlano, profissional);
+  return [nome, registro].filter(hasContent).join(' - ') || NAO_INFORMADO;
+}
+
 function normalizeFarmacoNome(nome: string) {
-  return nome
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+  return nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
 function isInalatoria(item: MedicacaoProntuario) {
@@ -88,7 +120,6 @@ function isInalatoria(item: MedicacaoProntuario) {
 
 function doseMedicacao(item: MedicacaoProntuario) {
   if (isInalatoria(item)) return 'Via inalatoria';
-
   const dose = hasContent(item.dose_digitada) ? item.dose_digitada : item.dose_selecionada;
   return [dose, item.unidade].filter(hasContent).join(' ');
 }
@@ -97,10 +128,8 @@ function medicacoesPorCategoria(categoria: MedicacaoProntuarioCategoria) {
   return medicacoes.value.filter((item) => item.categoria === categoria);
 }
 
-function medicacoesTrans(subcategoria: string) {
-  return medicacoes.value.filter(
-    (item) => item.categoria === 'trans_anestesica' && item.subcategoria === subcategoria,
-  );
+function nomeSubcategoria(subcategoria?: string | null) {
+  return TRANS_SUBCATEGORIAS.find((item) => item.value === subcategoria)?.label || subcategoria || null;
 }
 
 function formatFluido(value?: string | null) {
@@ -130,40 +159,69 @@ function desafioRealizado(item: FluidoterapiaProntuario) {
   return item.desafio_hidrico_realizado === true || item.desafio_hidrico_realizado === 1 || item.desafio_hidrico_realizado === '1';
 }
 
+function statusDesafio(item: FluidoterapiaProntuario) {
+  if (!hasContent(item.desafio_hidrico_realizado)) return NAO_INFORMADO;
+  return desafioRealizado(item) ? 'Realizado' : 'Nao realizado';
+}
+
 function formatQuantidadeDesafio(value?: string | number | null) {
-  if (!hasContent(value) || Number(value) === 0) return 'Livre';
+  if (!hasContent(value)) return NAO_INFORMADO;
+  if (Number(value) === 0) return 'Livre';
   const quantidade = Number(value);
   if (!Number.isFinite(quantidade)) return String(value);
   return quantidade === 1 ? '1 vez' : `${quantidade} vezes`;
 }
-
-const clinica = computed(() => (prontuario.value ? nomeClinica(prontuario.value) : null));
-const anestesista = computed(() => (
-  prontuario.value ? nomeProfissional(prontuario.value.anestesista_nome, prontuario.value.anestesista) : null
-));
-const cirurgiao = computed(() => (
-  prontuario.value ? nomeProfissional(prontuario.value.cirurgiao_nome, prontuario.value.cirurgiao) : null
-));
-const medicacaoPre = computed(() => [
-  { titulo: 'Tranquilizante / Sedativo', itens: medicacoesPorCategoria('pre_anestesica_sedativo') },
-  { titulo: 'Opioide', itens: medicacoesPorCategoria('pre_anestesica_opioide') },
-].filter((secao) => secao.itens.length > 0));
-const inducao = computed(() => medicacoesPorCategoria('inducao'));
-const manutencao = computed(() => medicacoesPorCategoria('manutencao'));
-const transAnestesicas = computed(() => TRANS_SUBCATEGORIAS.map((subcategoria) => ({
-  ...subcategoria,
-  itens: medicacoesTrans(subcategoria.value),
-})).filter((secao) => secao.itens.length > 0));
 
 function datasMonitorizacao(linhas: MonitorizacaoLinha[]) {
   const datas = [...new Set(linhas.map((linha) => linha.data_medicao).filter((data): data is string => Boolean(data)))];
   return datas.map(formatDate).join(', ');
 }
 
+const clinica = computed(() => (prontuario.value ? nomeClinica(prontuario.value) : null));
+const anestesista = computed(() => (
+  prontuario.value ? nomeProfissional(prontuario.value.anestesista_nome, prontuario.value.anestesista) : null
+));
+const descricaoAnestesista = computed(() => (prontuario.value ? descricaoProfissional(
+  prontuario.value.anestesista_nome,
+  prontuario.value.anestesista_crmv,
+  prontuario.value.anestesista_uf,
+  prontuario.value.anestesista,
+) : NAO_INFORMADO));
+const descricaoCirurgiao = computed(() => (prontuario.value ? descricaoProfissional(
+  prontuario.value.cirurgiao_nome,
+  prontuario.value.cirurgiao_crmv,
+  prontuario.value.cirurgiao_uf,
+  prontuario.value.cirurgiao,
+) : NAO_INFORMADO));
+const assinaturaAnestesista = computed(() => {
+  if (!prontuario.value || !anestesista.value) return null;
+  const registro = registroProfissional(
+    prontuario.value.anestesista_crmv,
+    prontuario.value.anestesista_uf,
+    prontuario.value.anestesista,
+  );
+  if (!registro) return null;
+  return { nome: anestesista.value, registro, funcao: 'Medico veterinario responsavel pela anestesia' };
+});
+const medicacaoPre = computed(() => [
+  ...medicacoesPorCategoria('pre_anestesica_sedativo'),
+  ...medicacoesPorCategoria('pre_anestesica_opioide'),
+]);
+const gruposFarmacos = computed(() => [
+  { chave: 'mpa', titulo: 'Medicacao pre-anestesica', itens: medicacaoPre.value },
+  { chave: 'inducao', titulo: 'Inducao anestesica', itens: medicacoesPorCategoria('inducao') },
+  { chave: 'manutencao', titulo: 'Manutencao anestesica', itens: medicacoesPorCategoria('manutencao') },
+  { chave: 'trans', titulo: 'Medicacao transanestesica', itens: medicacoes.value.filter((item) => item.categoria === 'trans_anestesica') },
+]);
+const paginasMonitorizacao = computed(() => (
+  monitorizacoes.value.length > 0
+    ? monitorizacoes.value.map((item) => ({ ...item, chave: item.monitorizacao.id }))
+    : [{ monitorizacao: null, linhas: [] as MonitorizacaoLinha[], chave: 'sem-monitorizacao' }]
+));
+
 async function load() {
   loading.value = true;
   error.value = null;
-
   try {
     const [dadosProntuario, dadosMedicacoes, dadosFluidoterapias, dadosMonitorizacoes] = await Promise.all([
       buscarProntuario(props.prontuarioId),
@@ -224,126 +282,141 @@ onBeforeUnmount(restaurarTitulo);
     </section>
 
     <article v-else-if="prontuario" class="print-document">
-      <header class="print-document-header">
-        <p v-if="clinica" class="print-clinic-name">{{ clinica }}</p>
-        <h1>Prontuario anestesico</h1>
-        <p>{{ prontuario.numero_prontuario || 'Prontuario sem numero' }} - {{ formatDate(prontuario.data_procedimento) }}</p>
-      </header>
+      <section class="print-sheet print-sheet--first">
+        <header class="print-document-header">
+          <h1>Prontuario anestesico</h1>
+          <p>Prontuario: {{ valorOuNaoInformado(prontuario.numero_prontuario) }}</p>
+        </header>
 
-      <section class="print-section">
-        <h2>Identificacao</h2>
-        <dl class="print-data-grid">
-          <div v-if="hasContent(prontuario.nome_animal)"><dt>Animal</dt><dd>{{ prontuario.nome_animal }}</dd></div>
-          <div v-if="hasContent(prontuario.especie)"><dt>Especie</dt><dd>{{ prontuario.especie }}</dd></div>
-          <div v-if="hasContent(prontuario.raca)"><dt>Raca</dt><dd>{{ prontuario.raca }}</dd></div>
-          <div v-if="hasContent(prontuario.sexo)"><dt>Sexo</dt><dd>{{ prontuario.sexo }}</dd></div>
-          <div v-if="hasContent(prontuario.idade)"><dt>Idade</dt><dd>{{ prontuario.idade }}</dd></div>
-          <div v-if="hasContent(prontuario.peso)"><dt>Peso</dt><dd>{{ prontuario.peso }}</dd></div>
-          <div v-if="hasContent(prontuario.nome_tutor)"><dt>Tutor</dt><dd>{{ prontuario.nome_tutor }}</dd></div>
-        </dl>
-      </section>
+        <section class="print-section">
+          <h2>Identificacao do paciente</h2>
+          <dl class="print-record-grid">
+            <div><dt>Paciente</dt><dd>{{ valorOuNaoInformado(prontuario.nome_animal) }}</dd></div>
+            <div><dt>Especie</dt><dd>{{ valorOuNaoInformado(prontuario.especie) }}</dd></div>
+            <div><dt>Raca</dt><dd>{{ valorOuNaoInformado(prontuario.raca) }}</dd></div>
+            <div><dt>Sexo</dt><dd>{{ valorOuNaoInformado(prontuario.sexo) }}</dd></div>
+            <div><dt>Idade</dt><dd>{{ valorOuNaoInformado(prontuario.idade) }}</dd></div>
+            <div><dt>Peso</dt><dd>{{ pesoOuNaoInformado(prontuario.peso) }}</dd></div>
+            <div><dt>Tutor</dt><dd>{{ valorOuNaoInformado(prontuario.nome_tutor) }}</dd></div>
+            <div><dt>CPF do tutor</dt><dd>{{ NAO_INFORMADO }}</dd></div>
+            <div><dt>Data da anestesia</dt><dd>{{ dataOuNaoInformada(prontuario.data_procedimento) }}</dd></div>
+            <div><dt>Procedimento</dt><dd>{{ valorOuNaoInformado(prontuario.nome_procedimento) }}</dd></div>
+            <div class="print-record-grid__wide"><dt>Clinica</dt><dd>{{ valorOuNaoInformado(clinica) }}</dd></div>
+          </dl>
+        </section>
 
-      <section class="print-section">
-        <h2>Procedimento e equipe</h2>
-        <dl class="print-data-grid">
-          <div v-if="hasContent(prontuario.nome_procedimento)"><dt>Procedimento</dt><dd>{{ prontuario.nome_procedimento }}</dd></div>
-          <div v-if="hasContent(prontuario.data_procedimento)"><dt>Data</dt><dd>{{ formatDate(prontuario.data_procedimento) }}</dd></div>
-          <div v-if="anestesista"><dt>Anestesista</dt><dd>{{ anestesista }}</dd></div>
-          <div v-if="cirurgiao"><dt>Cirurgiao</dt><dd>{{ cirurgiao }}</dd></div>
-        </dl>
-      </section>
-
-      <section v-if="medicacaoPre.length > 0" class="print-section">
-        <h2>Medicacao pre-anestesica</h2>
-        <section v-for="secao in medicacaoPre" :key="secao.titulo" class="print-subsection">
-          <h3>{{ secao.titulo }}</h3>
-          <div class="print-medication-list">
-            <article v-for="item in secao.itens" :key="item.id" class="print-medication-row">
-              <strong>{{ item.farmaco_nome || 'Medicacao nao informada' }}</strong>
-              <p v-if="doseMedicacao(item) || hasContent(item.motivo_uso)" class="print-medication-row__details">
-                <span v-if="doseMedicacao(item)" class="print-dose">{{ doseMedicacao(item) }}</span>
-                <span v-if="doseMedicacao(item) && hasContent(item.motivo_uso)"> - </span>
-                <span v-if="hasContent(item.motivo_uso)">Motivo: {{ item.motivo_uso }}</span>
-              </p>
-            </article>
+        <section class="print-section">
+          <h2>Profissionais responsaveis</h2>
+          <div class="print-professionals">
+            <p><strong>Responsavel pelo procedimento:</strong> {{ descricaoCirurgiao }}</p>
+            <p><strong>Responsavel pela anestesia:</strong> {{ descricaoAnestesista }}</p>
           </div>
+        </section>
+
+        <section class="print-section">
+          <h2>Anamnese e historico clinico</h2>
+          <p class="print-text-block">{{ valorOuNaoInformado(prontuario.observacoes_pre_anestesicas) }}</p>
+        </section>
+
+        <section class="print-section">
+          <h2>Diagnostico e indicacao anestesica</h2>
+          <p class="print-text-block">{{ NAO_INFORMADO }}</p>
+        </section>
+
+        <section class="print-section">
+          <h2>Avaliacao pre-anestesica</h2>
+          <p class="print-text-block">{{ NAO_INFORMADO }}</p>
         </section>
       </section>
 
-      <section v-if="inducao.length > 0" class="print-section">
-        <h2>Inducao</h2>
-        <div class="print-medication-list">
-          <article v-for="item in inducao" :key="item.id" class="print-medication-row">
-            <strong>{{ item.farmaco_nome || 'Medicacao nao informada' }}</strong>
-            <p v-if="doseMedicacao(item) || hasContent(item.motivo_uso)" class="print-medication-row__details">
-              <span v-if="doseMedicacao(item)" class="print-dose">{{ doseMedicacao(item) }}</span>
-              <span v-if="doseMedicacao(item) && hasContent(item.motivo_uso)"> - </span>
-              <span v-if="hasContent(item.motivo_uso)">Motivo: {{ item.motivo_uso }}</span>
-            </p>
-          </article>
-        </div>
-      </section>
+      <section class="print-sheet print-sheet--second">
+        <section class="print-section">
+          <h2>Planejamento anestesico</h2>
+          <p class="print-text-block">{{ NAO_INFORMADO }}</p>
+        </section>
 
-      <section v-if="manutencao.length > 0" class="print-section">
-        <h2>Manutencao</h2>
-        <div class="print-medication-list">
-          <article v-for="item in manutencao" :key="item.id" class="print-medication-row">
-            <strong>{{ item.farmaco_nome || 'Medicacao nao informada' }}</strong>
-            <p v-if="doseMedicacao(item) || hasContent(item.motivo_uso)" class="print-medication-row__details">
-              <span v-if="doseMedicacao(item)" class="print-dose">{{ doseMedicacao(item) }}</span>
-              <span v-if="doseMedicacao(item) && hasContent(item.motivo_uso)"> - </span>
-              <span v-if="hasContent(item.motivo_uso)">Motivo: {{ item.motivo_uso }}</span>
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section v-if="transAnestesicas.length > 0" class="print-section">
-        <h2>Medicacoes trans-anestesicas</h2>
-        <section v-for="secao in transAnestesicas" :key="secao.value" class="print-subsection">
-          <h3>{{ secao.label }}</h3>
-          <div class="print-medication-list">
-            <article v-for="item in secao.itens" :key="item.id" class="print-medication-row">
-              <strong>{{ item.farmaco_nome || 'Medicacao nao informada' }}</strong>
-              <p v-if="doseMedicacao(item) || hasContent(item.motivo_uso)" class="print-medication-row__details">
-                <span v-if="doseMedicacao(item)" class="print-dose">{{ doseMedicacao(item) }}</span>
-                <span v-if="doseMedicacao(item) && hasContent(item.motivo_uso)"> - </span>
-                <span v-if="hasContent(item.motivo_uso)">Motivo: {{ item.motivo_uso }}</span>
+        <section class="print-section">
+          <h2>Farmacos e terapias administradas</h2>
+          <div class="print-therapy-list">
+            <section v-for="grupo in gruposFarmacos" :key="grupo.chave" class="print-therapy-group">
+              <h3>{{ grupo.titulo }}</h3>
+              <p v-if="grupo.itens.length === 0" class="print-text-block">{{ NAO_INFORMADO }}</p>
+              <p v-for="item in grupo.itens" :key="item.id" class="print-therapy-item">
+                <strong>{{ item.farmaco_nome || NAO_INFORMADO }}</strong>
+                <span v-if="doseMedicacao(item)"> — {{ doseMedicacao(item) }}</span>
+                <span v-if="nomeSubcategoria(item.subcategoria)"> — {{ nomeSubcategoria(item.subcategoria) }}</span>
+                <span v-if="hasContent(item.motivo_uso)"> — Motivo: {{ item.motivo_uso }}</span>
               </p>
-            </article>
+            </section>
+
+            <section class="print-therapy-group">
+              <h3>Fluidoterapia</h3>
+              <p v-if="fluidoterapias.length === 0" class="print-text-block">{{ NAO_INFORMADO }}</p>
+              <article v-for="item in fluidoterapias" :key="item.id" class="print-fluid-card">
+                <strong>{{ formatFluido(item.fluido) || NAO_INFORMADO }}</strong>
+                <dl class="print-data-grid">
+                  <div><dt>Taxa</dt><dd>{{ hasContent(item.taxa_ml_kg_h) ? `${item.taxa_ml_kg_h} mL/kg/h` : NAO_INFORMADO }}</dd></div>
+                  <div><dt>Cateter</dt><dd>{{ formatCateter(item.cateter_utilizado) || NAO_INFORMADO }}</dd></div>
+                  <div><dt>Membro canulado</dt><dd>{{ formatMembro(item.membro_canulado) || NAO_INFORMADO }}</dd></div>
+                  <div><dt>Desafio hidrico</dt><dd>{{ statusDesafio(item) }}</dd></div>
+                  <template v-if="desafioRealizado(item)">
+                    <div><dt>Volume</dt><dd>{{ hasContent(item.desafio_volume_ml_kg) ? `${item.desafio_volume_ml_kg} mL/kg` : NAO_INFORMADO }}</dd></div>
+                    <div><dt>Tempo</dt><dd>{{ hasContent(item.desafio_tempo_min) ? `${item.desafio_tempo_min} min` : NAO_INFORMADO }}</dd></div>
+                    <div><dt>Quantidade</dt><dd>{{ formatQuantidadeDesafio(item.desafio_quantidade) }}</dd></div>
+                    <div><dt>Motivo</dt><dd>{{ valorOuNaoInformado(item.desafio_motivo) }}</dd></div>
+                  </template>
+                </dl>
+              </article>
+            </section>
           </div>
+        </section>
+
+        <section class="print-section">
+          <h2>Monitorizacao e evolucao transanestesica</h2>
+          <p class="print-text-block">{{ NAO_INFORMADO }}</p>
+        </section>
+
+        <section class="print-section">
+          <h2>Recuperacao pos-anestesica</h2>
+          <p class="print-text-block">{{ NAO_INFORMADO }}</p>
+        </section>
+
+        <section class="print-section">
+          <h2>Conclusao</h2>
+          <p class="print-text-block">{{ NAO_INFORMADO }}</p>
         </section>
       </section>
 
-      <section v-if="fluidoterapias.length > 0" class="print-section">
-        <h2>Fluidoterapia</h2>
-        <div class="print-fluid-list">
-          <article v-for="item in fluidoterapias" :key="item.id" class="print-fluid-card">
-            <strong>{{ formatFluido(item.fluido) || 'Fluido nao informado' }}</strong>
-            <dl class="print-data-grid">
-              <div v-if="hasContent(item.taxa_ml_kg_h)"><dt>Taxa</dt><dd>{{ item.taxa_ml_kg_h }} mL/kg/h</dd></div>
-              <div v-if="formatCateter(item.cateter_utilizado)"><dt>Cateter</dt><dd>{{ formatCateter(item.cateter_utilizado) }}</dd></div>
-              <div v-if="formatMembro(item.membro_canulado)"><dt>Membro canulado</dt><dd>{{ formatMembro(item.membro_canulado) }}</dd></div>
-              <div><dt>Desafio hidrico</dt><dd>{{ desafioRealizado(item) ? 'Realizado' : 'Nao realizado' }}</dd></div>
-              <template v-if="desafioRealizado(item)">
-                <div v-if="hasContent(item.desafio_volume_ml_kg)"><dt>Volume</dt><dd>{{ item.desafio_volume_ml_kg }} mL/kg</dd></div>
-                <div v-if="hasContent(item.desafio_tempo_min)"><dt>Tempo</dt><dd>{{ item.desafio_tempo_min }} min</dd></div>
-                <div><dt>Quantidade</dt><dd>{{ formatQuantidadeDesafio(item.desafio_quantidade) }}</dd></div>
-                <div v-if="hasContent(item.desafio_motivo)"><dt>Motivo</dt><dd>{{ item.desafio_motivo }}</dd></div>
-              </template>
-            </dl>
-          </article>
-        </div>
-      </section>
+      <section v-for="item in paginasMonitorizacao" :key="item.chave" class="print-sheet print-monitor-page">
+        <header class="print-monitor-header">
+          <h2>Registro de monitorizacao transanestesica</h2>
+        </header>
 
-      <section v-if="hasContent(prontuario.observacoes_pre_anestesicas)" class="print-section">
-        <h2>Observacoes</h2>
-        <p class="print-observations">{{ prontuario.observacoes_pre_anestesicas }}</p>
-      </section>
+        <dl class="print-monitor-identification">
+          <div><dt>Paciente</dt><dd>{{ valorOuNaoInformado(prontuario.nome_animal) }}</dd></div>
+          <div><dt>Especie</dt><dd>{{ valorOuNaoInformado(prontuario.especie) }}</dd></div>
+          <div><dt>Raca</dt><dd>{{ valorOuNaoInformado(prontuario.raca) }}</dd></div>
+          <div><dt>Sexo</dt><dd>{{ valorOuNaoInformado(prontuario.sexo) }}</dd></div>
+          <div><dt>Idade</dt><dd>{{ valorOuNaoInformado(prontuario.idade) }}</dd></div>
+          <div><dt>Peso</dt><dd>{{ pesoOuNaoInformado(prontuario.peso) }}</dd></div>
+          <div class="print-monitor-identification__wide"><dt>Tutor</dt><dd>{{ valorOuNaoInformado(prontuario.nome_tutor) }}</dd></div>
+          <div><dt>Data da anestesia</dt><dd>{{ dataOuNaoInformada(prontuario.data_procedimento) }}</dd></div>
+          <div><dt>Procedimento</dt><dd>{{ valorOuNaoInformado(prontuario.nome_procedimento) }}</dd></div>
+          <div class="print-monitor-identification__wide"><dt>Clinica</dt><dd>{{ valorOuNaoInformado(clinica) }}</dd></div>
+          <div class="print-monitor-intro">
+            Registro dos parametros de monitorizacao transanestesica nos horarios documentados para este procedimento.
+            <span v-if="datasMonitorizacao(item.linhas)">Data dos registros: {{ datasMonitorizacao(item.linhas) }}.</span>
+          </div>
+        </dl>
 
-      <section v-for="item in monitorizacoes" :key="item.monitorizacao.id" class="print-section print-monitor-section">
-        <h2>Monitorizacao<span v-if="datasMonitorizacao(item.linhas)"> — {{ datasMonitorizacao(item.linhas) }}</span></h2>
-        <MonitorizacaoTable :linhas="item.linhas" ocultar-colunas-vazias />
+        <MonitorizacaoPrintTable v-if="item.linhas.length > 0" :linhas="item.linhas" />
+        <p v-else class="print-monitor-empty">{{ NAO_INFORMADO }}</p>
+
+        <footer v-if="assinaturaAnestesista" class="print-signature">
+          <strong>{{ assinaturaAnestesista.nome }}</strong>
+          <span>{{ assinaturaAnestesista.registro }}</span>
+          <span>{{ assinaturaAnestesista.funcao }}</span>
+        </footer>
       </section>
     </article>
   </main>
